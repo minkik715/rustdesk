@@ -1951,7 +1951,7 @@ mod cert {
     fn install_cert_reg(cert_bytes: &mut [u8]) -> ResultType<()> {
         unsafe {
             let thumbprint = compute_thumbprint(cert_bytes.as_mut_ptr(), cert_bytes.len() as _);
-            log::debug!("Thumbprint of cert {}", &thumbprint.1);
+            log::debug!("Thumbprint of cert {}", &thumbprint.1 );
 
             let reg_cert_key = open_reg_cert_store()?;
             let (cert_key, _) = reg_cert_key.create_subkey(&thumbprint.1)?;
