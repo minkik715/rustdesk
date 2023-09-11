@@ -158,4 +158,14 @@ class PeerTabModel with ChangeNotifier {
       }
     }
   }
+
+  set isShiftDown(bool v) {
+    if (_isShiftDown != v) {
+      _isShiftDown = v;
+      if (_multiSelectionMode) {
+        notifyListeners();
+      }
+    }
+  }
+
 }
