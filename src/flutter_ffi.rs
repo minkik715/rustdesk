@@ -97,7 +97,7 @@ pub fn session_add_sync(
         is_port_forward,
         is_rdp,
         &switch_uuid,
-        force_relay,
+        true,
         password,
     ) {
         SyncReturn(format!("Failed to add session with id {}, {}", &id, e))
@@ -182,7 +182,7 @@ pub fn session_record_status(session_id: SessionID, status: bool) {
 
 pub fn session_reconnect(session_id: SessionID, force_relay: bool) {
     if let Some(session) = SESSIONS.read().unwrap().get(&session_id) {
-        session.reconnect(force_relay);
+        session.reconnect(true);
     }
 }
 
@@ -1009,16 +1009,16 @@ pub fn main_handle_relay_id(id: String) -> String {
 
 pub fn main_get_current_display() -> SyncReturn<String> {
     #[cfg(not(target_os = "ios"))]
-    let display_info = match crate::video_service::get_current_display() {
+        let display_info = match crate::video_service::get_current_display() {
         Ok((_, _, display)) => serde_json::to_string(&HashMap::from([
             ("w", display.width()),
             ("h", display.height()),
         ]))
-        .unwrap_or_default(),
+            .unwrap_or_default(),
         Err(..) => "".to_string(),
     };
     #[cfg(target_os = "ios")]
-    let display_info = "".to_owned();
+        let display_info = "".to_owned();
     SyncReturn(display_info)
 }
 
@@ -1632,9 +1632,9 @@ pub fn plugin_get_session_option(
         SyncReturn(crate::plugin::PeerConfig::get(&_id, &_peer, &_key))
     }
     #[cfg(any(
-        not(feature = "plugin_framework"),
-        target_os = "android",
-        target_os = "ios"
+    not(feature = "plugin_framework"),
+    target_os = "android",
+    target_os = "ios"
     ))]
     {
         SyncReturn(None)
@@ -1658,9 +1658,9 @@ pub fn plugin_get_shared_option(_id: String, _key: String) -> SyncReturn<Option<
         SyncReturn(crate::plugin::ipc::get_config(&_id, &_key).unwrap_or(None))
     }
     #[cfg(any(
-        not(feature = "plugin_framework"),
-        target_os = "android",
-        target_os = "ios"
+    not(feature = "plugin_framework"),
+    target_os = "android",
+    target_os = "ios"
     ))]
     {
         SyncReturn(None)
@@ -1717,9 +1717,9 @@ pub fn plugin_is_enabled(_id: String) -> SyncReturn<bool> {
         )
     }
     #[cfg(any(
-        not(feature = "plugin_framework"),
-        target_os = "android",
-        target_os = "ios"
+    not(feature = "plugin_framework"),
+    target_os = "android",
+    target_os = "ios"
     ))]
     {
         SyncReturn(false)
@@ -1731,15 +1731,15 @@ pub fn plugin_feature_is_enabled() -> SyncReturn<bool> {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         #[cfg(debug_assertions)]
-        let enabled = true;
+            let enabled = true;
         #[cfg(not(debug_assertions))]
-        let enabled = is_installed();
+            let enabled = is_installed();
         SyncReturn(enabled)
     }
     #[cfg(any(
-        not(feature = "plugin_framework"),
-        target_os = "android",
-        target_os = "ios"
+    not(feature = "plugin_framework"),
+    target_os = "android",
+    target_os = "ios"
     ))]
     {
         SyncReturn(false)
