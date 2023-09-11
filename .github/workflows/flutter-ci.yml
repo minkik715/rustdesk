@@ -9,6 +9,7 @@ on:
   push:
     branches:
       - master
+      - need/merge
     paths-ignore:
       - ".github/**"
       - "docs/**"
