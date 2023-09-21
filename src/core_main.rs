@@ -357,7 +357,7 @@ pub fn core_main() -> Option<Vec<String>> {
                         }
                         let url = crate::ui_interface::get_api_server() + "/api/devices/cli";
                         match crate::post_request_sync(url, body.to_string(), &header) {
-                            Err(err) => primy_printlnntln!("{}", err),
+                            Err(err) => println!("{}", err),
                             Ok(text) => {
                                 if text.is_empty() {
                                     my_println!("Done!");
