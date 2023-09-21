@@ -13,7 +13,8 @@ on:
       - ".github/**"
       - "docs/**"
       - "README.md"
-
+permissions:
+  contents: write
 jobs:
   run-ci:
     uses: ./.github/workflows/flutter-build.yml
