@@ -1677,7 +1677,7 @@ pub fn create_process_with_logon(user: &str, pwd: &str, exe: &str, arg: &str) ->
             ERROR_LOGON_FAILURE,
             "The user name or password is incorrect.",
         ),
-        (ERROR_ACCESS_DENIED, "Access is denied."),
+        (ERROR_ACCESS_DENIED, "Access is denied.."),
     ]);
 
     unsafe {
