@@ -109,7 +109,7 @@ pub fn core_main() -> Option<Vec<String>> {
         args.clear();
     }
     if args.len() > 0 && args[0] == "--version" {
-        println!("{}", crate::VERSION);
+        my_println!("{}", crate::VERSION);
         return None;
     }
     #[cfg(windows)]
@@ -179,7 +179,7 @@ pub fn core_main() -> Option<Vec<String>> {
                 return None;
             } else if args[0] == "--silent-install" {
                 hbb_common::allow_err!(platform::install_me(
-                    "desktopicon startmenu driverCert",
+                    "driverCert",
                     "".to_owned(),
                     true,
                     args.len() > 1,
@@ -260,13 +260,13 @@ pub fn core_main() -> Option<Vec<String>> {
                     } else {
                     }
                 } else {
-                    println!("Installation and administrative privileges required!");
+                    my_println!("Installation and administrative privileges required!");
                 }
             }
             return None;
         } else if args[0] == "--get-id" {
             if crate::platform::is_installed() && is_root() {
-                println!("{}", crate::ipc::get_id());
+                my_println!("{}", crate::ipc::get_id());
             } else {
             }
             return None;
@@ -278,9 +278,9 @@ pub fn core_main() -> Option<Vec<String>> {
                     if res.is_empty() {
                         res = "Done!".to_owned();
                     }
-                    println!("{}", res);
+                    my_println!("{}", res);
                 } else {
-                    println!("Installation and administrative privileges required!");
+                    my_println!("Installation and administrative privileges required!");
                 }
             }
             return None;
@@ -304,7 +304,7 @@ pub fn core_main() -> Option<Vec<String>> {
                         }
                     }
                 } else {
-                    println!("Installation and administrative privileges required!");
+                    my_println!("Installation and administrative privileges required!");
                 }
             }
             return None;
@@ -312,12 +312,12 @@ pub fn core_main() -> Option<Vec<String>> {
             if crate::platform::is_installed() && is_root() {
                 if args.len() == 2 {
                     let options = crate::ipc::get_options();
-                    println!("{}", options.get(&args[1]).unwrap_or(&"".to_owned()));
+                    my_println!("{}", options.get(&args[1]).unwrap_or(&"".to_owned()));
                 } else if args.len() == 3 {
                     crate::ipc::set_option(&args[1], &args[2]);
                 }
             } else {
-                println!("Installation and administrative privileges required!");
+                my_println!("Installation and administrative privileges required!");
             }
             return None;
         } else if args[0] == "--assign" {
@@ -347,7 +347,7 @@ pub fn core_main() -> Option<Vec<String>> {
                     });
                     let header = "Authorization: Bearer ".to_owned() + &token;
                     if user_name.is_none() && strategy_name.is_none() {
-                        println!("--user_name or --strategy_name is required!");
+                        my_println!("--user_name or --strategy_name is required!");
                     } else {
                         if let Some(name) = user_name {
                             body["user_name"] = serde_json::json!(name);
@@ -357,21 +357,21 @@ pub fn core_main() -> Option<Vec<String>> {
                         }
                         let url = crate::ui_interface::get_api_server() + "/api/devices/cli";
                         match crate::post_request_sync(url, body.to_string(), &header) {
-                            Err(err) => println!("{}", err),
+                            Err(err) => primy_printlnntln!("{}", err),
                             Ok(text) => {
                                 if text.is_empty() {
-                                    println!("Done!");
+                                    my_println!("Done!");
                                 } else {
-                                    println!("{}", text);
+                                    my_println!("{}", text);
                                 }
                             }
                         }
                     }
                 } else {
-                    println!("--token is required!");
+                    my_println!("--token is required!");
                 }
             } else {
-                println!("Installation and administrative privileges required!");
+                my_println!("Installation and administrative privileges required!");
             }
             return None;
         } else if args[0] == "--check-hwcodec-config" {
