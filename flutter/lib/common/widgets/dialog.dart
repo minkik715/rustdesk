@@ -156,8 +156,8 @@ void changeIdDialog() {
                     }).toList(),
                   )).marginOnly(bottom: 8)
               : SizedBox.shrink(),
-          Offstage(
-              offstage: !isInProgress, child: const LinearProgressIndicator())
+          // NOT use Offstage to wrap LinearProgressIndicator
+          if (isInProgress) const LinearProgressIndicator(),
         ],
       ),
       actions: [
@@ -202,8 +202,8 @@ void changeWhiteList({Function()? callback}) async {
           const SizedBox(
             height: 4.0,
           ),
-          Offstage(
-              offstage: !isInProgress, child: const LinearProgressIndicator())
+          // NOT use Offstage to wrap LinearProgressIndicator
+          if (isInProgress) const LinearProgressIndicator(),
         ],
       ),
       actions: [
@@ -1352,7 +1352,7 @@ customImageQualityDialog(SessionID sessionId, String id, FFI ffi) async {
   msgBoxCommon(ffi.dialogManager, 'Custom Image Quality', content, [btnClose]);
 }
 
-void deletePeerConfirmDialog(Function onSubmit) async {
+void deletePeerConfirmDialog(Function onSubmit, String title) async {
   gFFI.dialogManager.show(
     (setState, close, context) {
       submit() async {
@@ -1368,8 +1368,10 @@ void deletePeerConfirmDialog(Function onSubmit) async {
               Icons.delete_rounded,
               color: Colors.red,
             ),
-            Text(translate('Delete')).paddingOnly(
-              left: 10,
+            Expanded(
+              child: Text(title, overflow: TextOverflow.ellipsis).paddingOnly(
+                left: 10,
+              ),
             ),
           ],
         ),
@@ -1433,8 +1435,8 @@ void editAbTagDialog(
                   .toList(growable: false),
             ),
           ),
-          Offstage(
-              offstage: !isInProgress, child: const LinearProgressIndicator())
+          // NOT use Offstage to wrap LinearProgressIndicator
+          if (isInProgress) const LinearProgressIndicator(),
         ],
       ),
       actions: [
@@ -1443,6 +1445,77 @@ void editAbTagDialog(
       ],
       onSubmit: submit,
       onCancel: close,
+    );
+  });
+}
+
+void renameDialog(
+    {required String oldName,
+    FormFieldValidator<String>? validator,
+    required ValueChanged<String> onSubmit,
+    Function? onCancel}) async {
+  RxBool isInProgress = false.obs;
+  var controller = TextEditingController(text: oldName);
+  final formKey = GlobalKey<FormState>();
+  gFFI.dialogManager.show((setState, close, context) {
+    submit() async {
+      String text = controller.text.trim();
+      if (validator != null && formKey.currentState?.validate() == false) {
+        return;
+      }
+      isInProgress.value = true;
+      onSubmit(text);
+      close();
+      isInProgress.value = false;
+    }
+
+    cancel() {
+      onCancel?.call();
+      close();
+    }
+
+    return CustomAlertDialog(
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.edit_rounded, color: MyTheme.accent),
+          Text(translate('Rename')).paddingOnly(left: 10),
+        ],
+      ),
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            child: Form(
+              key: formKey,
+              child: TextFormField(
+                controller: controller,
+                autofocus: true,
+                decoration: InputDecoration(labelText: translate('Name')),
+                validator: validator,
+              ),
+            ),
+          ),
+          // NOT use Offstage to wrap LinearProgressIndicator
+          Obx(() =>
+              isInProgress.value ? const LinearProgressIndicator() : Offstage())
+        ],
+      ),
+      actions: [
+        dialogButton(
+          "Cancel",
+          icon: Icon(Icons.close_rounded),
+          onPressed: cancel,
+          isOutline: true,
+        ),
+        dialogButton(
+          "OK",
+          icon: Icon(Icons.done_rounded),
+          onPressed: submit,
+        ),
+      ],
+      onSubmit: submit,
+      onCancel: cancel,
     );
   });
 }

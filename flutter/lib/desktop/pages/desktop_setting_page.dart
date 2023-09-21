@@ -319,8 +319,8 @@ class _GeneralState extends State<_General> {
       _OptionCheckBox(context, 'Adaptive bitrate', 'enable-abr'),
       _OptionCheckBox(
         context,
-        'Separate remote windows',
-        kOptionSeparateRemoteWindow,
+        'Open connection in new tab',
+        kOptionOpenNewConnInTabs,
         isServer: false,
       ),
     ];
@@ -995,16 +995,19 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
             return false;
           }
         }
-        final old = await bind.mainGetOption(key: 'custom-rendezvous-server');
-        if (old.isNotEmpty && old != idServer) {
-          await gFFI.userModel.logOut();
-        }
+        final oldApiServer = await bind.mainGetApiServer();
+
         // should set one by one
         await bind.mainSetOption(
             key: 'custom-rendezvous-server', value: idServer);
         await bind.mainSetOption(key: 'relay-server', value: relayServer);
         await bind.mainSetOption(key: 'api-server', value: apiServer);
         await bind.mainSetOption(key: 'key', value: key);
+
+        final newApiServer = await bind.mainGetApiServer();
+        if (oldApiServer.isNotEmpty && oldApiServer != newApiServer) {
+          await gFFI.userModel.logOut(apiServer: oldApiServer);
+        }
         return true;
       }
 
@@ -1829,12 +1832,9 @@ Widget _lock(
                             Text(translate(label)).marginOnly(left: 5),
                           ]).marginSymmetric(vertical: 2)),
                   onPressed: () async {
-                    bool checked = await bind.mainCheckSuperUserPermission();
+                    bool checked = await callMainCheckSuperUserPermission();
                     if (checked) {
                       onUnlock();
-                    }
-                    if (Platform.isMacOS) {
-                      await windowManager.show();
                     }
                   },
                 ).marginSymmetric(horizontal: 2, vertical: 4),
@@ -2065,9 +2065,9 @@ void changeSocks5Proxy() async {
                 ),
               ],
             ),
-            Offstage(
-                offstage: !isInProgress,
-                child: const LinearProgressIndicator().marginOnly(top: 8))
+            // NOT use Offstage to wrap LinearProgressIndicator
+            if (isInProgress)
+              const LinearProgressIndicator().marginOnly(top: 8),
           ],
         ),
       ),

@@ -9,6 +9,7 @@ import '../../desktop/widgets/material_mod_popup_menu.dart' as mod_menu;
 import 'package:get/get.dart';
 
 import '../../common.dart';
+import 'dialog.dart';
 import 'login.dart';
 
 final hideAbTagsPanel = false.obs;
@@ -38,33 +39,85 @@ class _AddressBookState extends State<AddressBook> {
               child: ElevatedButton(
                   onPressed: loginDialog, child: Text(translate("Login"))));
         } else {
-          if (gFFI.abModel.abLoading.value) {
+          if (gFFI.abModel.abLoading.value && gFFI.abModel.emtpy) {
             return const Center(
               child: CircularProgressIndicator(),
             );
           }
-          if (gFFI.abModel.abError.isNotEmpty) {
-            return _buildShowError(gFFI.abModel.abError.value);
-          }
-          return isDesktop
-              ? _buildAddressBookDesktop()
-              : _buildAddressBookMobile();
+          return Column(
+            children: [
+              // NOT use Offstage to wrap LinearProgressIndicator
+              if (gFFI.abModel.retrying.value) LinearProgressIndicator(),
+              _buildErrorBanner(
+                  err: gFFI.abModel.pullError,
+                  retry: null,
+                  close: () => gFFI.abModel.pullError.value = ''),
+              _buildErrorBanner(
+                  err: gFFI.abModel.pushError,
+                  retry: () => gFFI.abModel.pushAb(isRetry: true),
+                  close: () => gFFI.abModel.pushError.value = ''),
+              Expanded(
+                  child: isDesktop
+                      ? _buildAddressBookDesktop()
+                      : _buildAddressBookMobile())
+            ],
+          );
         }
       });
 
-  Widget _buildShowError(String error) {
-    return Center(
-        child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(translate(error)),
-        TextButton(
-            onPressed: () {
-              gFFI.abModel.pullAb();
-            },
-            child: Text(translate("Retry")))
-      ],
-    ));
+  Widget _buildErrorBanner(
+      {required RxString err,
+      required Function? retry,
+      required Function close}) {
+    const double height = 25;
+    return Obx(() => Offstage(
+          offstage: !(!gFFI.abModel.abLoading.value && err.value.isNotEmpty),
+          child: Center(
+              child: Container(
+            height: height,
+            color: Color.fromARGB(255, 253, 238, 235),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                FittedBox(
+                  child: Icon(
+                    Icons.info,
+                    color: Color.fromARGB(255, 249, 81, 81),
+                  ),
+                ).marginAll(4),
+                Flexible(
+                  child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Tooltip(
+                        message: translate(err.value),
+                        child: Text(
+                          translate(err.value),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      )).marginSymmetric(vertical: 2),
+                ),
+                if (retry != null)
+                  InkWell(
+                      onTap: () {
+                        retry.call();
+                      },
+                      child: Text(
+                        translate("Retry"),
+                        style: TextStyle(color: MyTheme.accent),
+                      )).marginSymmetric(horizontal: 5),
+                FittedBox(
+                  child: InkWell(
+                    onTap: () {
+                      close.call();
+                    },
+                    child: Icon(Icons.close).marginSymmetric(horizontal: 5),
+                  ),
+                ).marginAll(4)
+              ],
+            ),
+          )).marginOnly(bottom: 14),
+        ));
   }
 
   Widget _buildAddressBookDesktop() {
@@ -270,13 +323,14 @@ class _AddressBookState extends State<AddressBook> {
             return;
           }
           gFFI.abModel.addId(id, aliasController.text.trim(), selectedTag);
-          await gFFI.abModel.pushAb();
+          gFFI.abModel.pushAb();
           this.setState(() {});
           // final currentPeers
         }
         close();
       }
 
+      double marginBottom = 4;
       return CustomAlertDialog(
         title: Text(translate("Add ID")),
         content: Column(
@@ -298,7 +352,7 @@ class _AddressBookState extends State<AddressBook> {
                       ),
                     ],
                   ),
-                ),
+                ).marginOnly(bottom: marginBottom),
                 TextField(
                   controller: idController,
                   inputFormatters: [IDTextInputFormatter()],
@@ -310,7 +364,7 @@ class _AddressBookState extends State<AddressBook> {
                     translate('Alias'),
                     style: style,
                   ),
-                ).marginOnly(top: 8, bottom: 2),
+                ).marginOnly(top: 8, bottom: marginBottom),
                 TextField(
                   controller: aliasController,
                 ),
@@ -320,8 +374,9 @@ class _AddressBookState extends State<AddressBook> {
                     translate('Tags'),
                     style: style,
                   ),
-                ).marginOnly(top: 8),
-                Container(
+                ).marginOnly(top: 8, bottom: marginBottom),
+                Align(
+                  alignment: Alignment.centerLeft,
                   child: Wrap(
                     children: tags
                         .map((e) => AddressBookTag(
@@ -343,8 +398,8 @@ class _AddressBookState extends State<AddressBook> {
             const SizedBox(
               height: 4.0,
             ),
-            Offstage(
-                offstage: !isInProgress, child: const LinearProgressIndicator())
+            // NOT use Offstage to wrap LinearProgressIndicator
+            if (isInProgress) const LinearProgressIndicator(),
           ],
         ),
         actions: [
@@ -377,7 +432,7 @@ class _AddressBookState extends State<AddressBook> {
           for (final tag in tags) {
             gFFI.abModel.addTag(tag);
           }
-          await gFFI.abModel.pushAb();
+          gFFI.abModel.pushAb();
           // final currentPeers
         }
         close();
@@ -409,8 +464,8 @@ class _AddressBookState extends State<AddressBook> {
             const SizedBox(
               height: 4.0,
             ),
-            Offstage(
-                offstage: !isInProgress, child: const LinearProgressIndicator())
+            // NOT use Offstage to wrap LinearProgressIndicator
+            if (isInProgress) const LinearProgressIndicator(),
           ],
         ),
         actions: [
@@ -448,31 +503,71 @@ class AddressBookTag extends StatelessWidget {
       pos = RelativeRect.fromLTRB(x, y, x, y);
     }
 
+    const double radius = 8;
     return GestureDetector(
       onTap: onTap,
       onTapDown: showActionMenu ? setPosition : null,
       onSecondaryTapDown: showActionMenu ? setPosition : null,
       onSecondaryTap: showActionMenu ? () => _showMenu(context, pos) : null,
       onLongPress: showActionMenu ? () => _showMenu(context, pos) : null,
-      child: Obx(
-        () => Container(
-          decoration: BoxDecoration(
-              color: tags.contains(name)
-                  ? Colors.blue
-                  : Theme.of(context).colorScheme.background,
-              borderRadius: BorderRadius.circular(6)),
-          margin: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
-          padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 8.0),
-          child: Text(name,
-              style:
-                  TextStyle(color: tags.contains(name) ? Colors.white : null)),
-        ),
-      ),
+      child: Obx(() => Container(
+            decoration: BoxDecoration(
+                color: tags.contains(name)
+                    ? str2color2(name, 0xFF)
+                    : Theme.of(context).colorScheme.background,
+                borderRadius: BorderRadius.circular(4)),
+            margin: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
+            padding: const EdgeInsets.symmetric(vertical: 2.0, horizontal: 6.0),
+            child: IntrinsicWidth(
+              child: Row(
+                children: [
+                  Container(
+                    width: radius,
+                    height: radius,
+                    decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: tags.contains(name)
+                            ? Colors.white
+                            : str2color2(name)),
+                  ).marginOnly(right: radius / 2),
+                  Expanded(
+                    child: Text(name,
+                        style: TextStyle(
+                            overflow: TextOverflow.ellipsis,
+                            color: tags.contains(name) ? Colors.white : null)),
+                  ),
+                ],
+              ),
+            ),
+          )),
     );
   }
 
   void _showMenu(BuildContext context, RelativeRect pos) {
     final items = [
+      getEntry(translate("Rename"), () {
+        renameDialog(
+            oldName: name,
+            validator: (String? newName) {
+              if (newName == null || newName.isEmpty) {
+                return translate('Can not be empty');
+              }
+              if (newName != name && gFFI.abModel.tags.contains(newName)) {
+                return translate('Already exists');
+              }
+              return null;
+            },
+            onSubmit: (String newName) {
+              if (name != newName) {
+                gFFI.abModel.renameTag(name, newName);
+                gFFI.abModel.pushAb();
+              }
+              Future.delayed(Duration.zero, () => Get.back());
+            },
+            onCancel: () {
+              Future.delayed(Duration.zero, () => Get.back());
+            });
+      }),
       getEntry(translate("Delete"), () {
         gFFI.abModel.deleteTag(name);
         gFFI.abModel.pushAb();

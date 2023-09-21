@@ -116,11 +116,7 @@ class _RemotePageState extends State<RemotePage>
       Wakelock.enable();
     }
     // Register texture.
-    if (mainGetLocalBoolOptionSync(kOptionSeparateRemoteWindow)) {
-      _renderTexture = renderTexture;
-    } else {
-      _renderTexture = RenderTexture();
-    }
+    _renderTexture = RenderTexture();
     _renderTexture.create(sessionId);
 
     _ffi.ffiModel.updateEventListener(sessionId, widget.id);
@@ -208,7 +204,7 @@ class _RemotePageState extends State<RemotePage>
     // https://github.com/flutter/flutter/issues/64935
     super.dispose();
     debugPrint("REMOTE PAGE dispose session $sessionId ${widget.id}");
-    await _renderTexture.destroy();
+    await _renderTexture.destroy(closeSession);
     // ensure we leave this session, this is a double check
     bind.sessionEnterOrLeave(sessionId: sessionId, enter: false);
     DesktopMultiWindow.removeListener(this);

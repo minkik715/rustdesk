@@ -862,8 +862,10 @@ impl<T: InvokeUiSession> Remote<T> {
             transfer_metas.write_jobs.push(json_str);
         }
         log::info!("meta: {:?}", transfer_metas);
-        config.transfer = transfer_metas;
-        self.handler.save_config(config);
+        if config.transfer != transfer_metas {
+            config.transfer = transfer_metas;
+            self.handler.save_config(config);
+        }
         true
     }
 
@@ -1024,7 +1026,7 @@ impl<T: InvokeUiSession> Remote<T> {
                         {
                             self.handler.cache_flutter.write().unwrap().pi = pi.clone();
                         }
-                        self.handler.handle_peer_info(pi);
+                        self.handler.handle_peer_info(pi, false);
                         #[cfg(not(feature = "flutter"))]
                         self.check_clipboard_file_context();
                         if !(self.handler.is_file_transfer() || self.handler.is_port_forward()) {
@@ -1504,6 +1506,12 @@ impl<T: InvokeUiSession> Remote<T> {
                     }
                 }
                 Some(message::Union::PeerInfo(pi)) => {
+                    #[cfg(feature = "flutter")]
+                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                    {
+                        self.handler.cache_flutter.write().unwrap().pi.displays =
+                            pi.displays.clone();
+                    }
                     self.handler.set_displays(&pi.displays);
                 }
                 _ => {}
