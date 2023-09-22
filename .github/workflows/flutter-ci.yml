@@ -1,7 +1,6 @@
 name: Full Flutter CI
 
 on:
-  workflow_dispatch:
   pull_request:
     paths-ignore:
       - "docs/**"
