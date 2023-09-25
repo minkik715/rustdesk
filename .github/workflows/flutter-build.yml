@@ -395,10 +395,10 @@ jobs:
         run: |
           for name in rustdesk*??.deb; do
               # use cp to duplicate deb files to fit other packages.
-              cp "$name" "${name%%.deb}-${{ matrix.job.arch }}.deb"
+              cp "$name" "rustdesk-${{ matrix.job.arch }}.deb"
               echo "Renamed $name to ${name%%.deb}-${{ matrix.job.arch }}.deb"
-              cp "$name" "${name%%.deb}-${{ env.VERSION }}-${{ matrix.job.arch }}.deb"
-              echo "Renamed $name to ${name%%.deb}-${{ env.VERSION }}-${{ matrix.job.arch }}.deb"
+              cp "$name" "rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.deb"
+              echo "Renamed $name to rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.deb"
           done
 
       - name: Publish debian package
@@ -409,7 +409,6 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           files: |
             rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.deb
-
       - name: Upload Artifact
         uses: actions/upload-artifact@master
         if: env.UPLOAD_ARTIFACT == 'true'
