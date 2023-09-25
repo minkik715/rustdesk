@@ -149,7 +149,7 @@ jobs:
     uses: ./.github/workflows/bridge.yml
   build-rustdesk-lib-linux-arm:
     if: ${{ inputs.upload-artifact }}
-    needs: [generate-bridge-linux, build-vcpkg-deps-linux]
+    needs: [ generate-bridge-linux, build-vcpkg-deps-linux ]
     name: build-rust-lib ${{ matrix.job.target }} (${{ matrix.job.os }}) [${{ matrix.job.extra-build-features }}]
     runs-on: ${{ matrix.job.os }}
     strategy:
@@ -184,26 +184,25 @@ jobs:
           # - { arch: armv7, target: armv7-unknown-linux-gnueabihf , os: ubuntu-20.04, use-cross: true, extra-build-features: "appimage" }
           # - { target: arm-unknown-linux-musleabihf, os: ubuntu-20.04, use-cross: true }
     steps:
-      #- name: Maximize build space
-      #  run: |
-      #    sudo rm -rf /opt/ghc
-      #    sudo rm -rf /usr/local/lib/android
-      #    sudo rm -rf /usr/share/dotnet
-      #    sudo apt update -y
-      #    sudo apt install qemu-user-static -y
+      - name: Maximize build space
+        run: |
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo apt update -y
+          sudo apt install qemu-user-static
 
       - name: Checkout source code
         uses: actions/checkout@v3
 
-      #- name: Set Swap Space
-      #  uses: pierotofy/set-swap-space@master
-      #  with:
-      #    swap-size-gb: 12
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 12
 
       - name: Free Space
         run: |
-          df -h
-          free -m
+          df
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -282,7 +281,6 @@ jobs:
             if ${{ matrix.job.enable-headless }}; then
               export DEFAULT_FEAT=linux_headless
             fi
-            export CARGO_INCREMENTAL=0
             cargo build --lib --features flutter,flutter_texture_render,${{ matrix.job.extra-build-features }},$DEFAULT_FEAT --release
 
       - name: Upload Artifacts
@@ -293,7 +291,7 @@ jobs:
 
   build-rustdesk-linux-arm:
     if: ${{ inputs.upload-artifact }}
-    needs: [build-rustdesk-lib-linux-arm]
+    needs: [ build-rustdesk-lib-linux-arm ]
     name: build-rustdesk ${{ matrix.job.target }} (${{ matrix.job.os }}) [${{ matrix.job.extra-build-features }}]
     runs-on: ubuntu-20.04 # 20.04 has more performance on arm build
     strategy:
@@ -403,7 +401,6 @@ jobs:
                 sed -i "s/x64\/release/arm\/release/g" ./build.py
               ;;
             esac
-            export CARGO_INCREMENTAL=0
             python3 ./build.py --flutter --hwcodec --skip-cargo
             # rpm package
             echo -e "start packaging fedora package"
@@ -485,8 +482,8 @@ jobs:
         uses: actions/upload-artifact@master
         if: ${{ contains(matrix.job.extra-build-features, 'flatpak') }}
         with:
-          name: rustdesk-zeron-${{ env.VERSION }}.deb
-          path: rustdesk-zeron-${{ env.VERSION }}.deb
+          name: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.deb
+          path: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.deb
 
       - name: Patch archlinux PKGBUILD
         if: ${{ matrix.job.extra-build-features == '' }}
@@ -500,6 +497,60 @@ jobs:
                 sed -i "s/linux\/x64/linux\/arm64/g" ./res/PKGBUILD
                 ;;
           esac
+
+      # Temporary disable for there is no many archlinux arm hosts
+      # - name: Build archlinux package
+      #   if: ${{ matrix.job.extra-build-features == '' }}
+      #   uses: vufa/arch-makepkg-action@master
+      #   with:
+      #     packages: >
+      #       llvm
+      #       clang
+      #       libva
+      #       libvdpau
+      #       rust
+      #       gstreamer
+      #       unzip
+      #       git
+      #       cmake
+      #       gcc
+      #       curl
+      #       wget
+      #       yasm
+      #       nasm
+      #       zip
+      #       make
+      #       pkg-config
+      #       clang
+      #       gtk3
+      #       xdotool
+      #       libxcb
+      #       libxfixes
+      #       alsa-lib
+      #       pipewire
+      #       python
+      #       ttf-arphic-uming
+      #       libappindicator-gtk3
+      #     scripts: |
+      #       cd res && HBB=`pwd`/.. FLUTTER=1 makepkg -f
+
+      # - name: Publish archlinux package
+      #   if: ${{ matrix.job.extra-build-features == '' }}
+      #   uses: softprops/action-gh-release@v1
+      #   with:
+      #     prerelease: true
+      #     tag_name: ${{ env.TAG_NAME }}
+      #     files: |
+      #       res/rustdesk*.zst
+
+      - name: Publish fedora package
+        if: matrix.job.extra-build-features == '' && env.UPLOAD_ARTIFACT == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          tag_name: ${{ env.TAG_NAME }}
+          files: |
+            /opt/artifacts/rpm/*.rpm
 
 
 
