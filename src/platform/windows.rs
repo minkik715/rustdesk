@@ -958,7 +958,7 @@ fn get_after_install(exe: &str) -> String {
     netsh advfirewall firewall add rule name=\"{app_name} Service\" dir=in action=allow program=\"{exe}\" enable=yes
     {create_service}
     reg add HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /f /v SoftwareSASGeneration /t REG_DWORD /d 1
-    ", create_service=get_create_service(&exe))
+    ", create_service = get_create_service(&exe))
 }
 
 pub fn install_me(options: &str, path: String, silent: bool, debug: bool) -> ResultType<()> {
@@ -1095,30 +1095,27 @@ reg add {subkey} /f /v EstimatedSize /t REG_DWORD /d {size}
 reg add {subkey} /f /v WindowsInstaller /t REG_DWORD /d 0
 cscript \"{mk_shortcut}\"
 cscript \"{uninstall_shortcut}\"
-cscript \"{tray_shortcut}\"
 {shortcuts}
 copy /Y \"{tmp_path}\\Uninstall {app_name}.lnk\" \"{path}\\\"
 {dels}
-{import_config}
 {install_cert}
 {after_install}
 {sleep}
     ",
-        version=crate::VERSION,
-        build_date=crate::BUILD_DATE,
-        after_install=get_after_install(&exe),
-        sleep=if debug {
+        version = crate::VERSION,
+        build_date = crate::BUILD_DATE,
+        after_install = get_after_install(&exe),
+        sleep = if debug {
             "timeout 300"
         } else {
             ""
         },
-        dels=if debug {
+        dels = if debug {
             ""
         } else {
             &dels
         },
         copy_exe = copy_exe_cmd(&src_exe, &exe, &path)?,
-        import_config = get_import_config(&exe),
     );
     run_cmds(cmds, debug, "install")?;
     run_after_run_cmds(silent);
@@ -1175,7 +1172,7 @@ fn get_uninstall(kill_self: bool) -> String {
     if exist \"%PUBLIC%\\Desktop\\{app_name}.lnk\" del /f /q \"%PUBLIC%\\Desktop\\{app_name}.lnk\"
     if exist \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\" del /f /q \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\"
     ",
-        before_uninstall=get_before_uninstall(kill_self),
+        before_uninstall = get_before_uninstall(kill_self),
         app_name = crate::get_app_name(),
     )
 }
@@ -2183,7 +2180,7 @@ if exist \"{tray_shortcut}\" del /f /q \"{tray_shortcut}\"
     ",
         app_name = crate::get_app_name(),
         import_config = get_import_config(&exe),
-        create_service = get_create_service(&exe),
+        create_service = get_create_service_and_start(&exe),
     );
     if let Err(err) = run_cmds(cmds, false, "install") {
         Config::set_option("stop-service".into(), "Y".into());
@@ -2207,13 +2204,11 @@ pub fn silent_start_service() -> bool {
         "
 chcp 65001
 taskkill /F /IM {app_name}.exe{filter}
-{import_config}
-{create_service}
+{start_service}
 if exist \"{tray_shortcut}\" del /f /q \"{tray_shortcut}\"
     ",
         app_name = crate::get_app_name(),
-        import_config = get_import_config(&exe),
-        create_service = get_create_service(&exe),
+        start_service = get_start_service(&exe),
     );
     if let Err(err) = run_cmds(cmds, false, "install") {
         Config::set_option("stop-service".into(), "Y".into());
@@ -2257,11 +2252,11 @@ sc stop {app_name}
 sc delete {app_name}
 ",
             app_name = crate::get_app_name(),
-            config_path=Config::file().to_str().unwrap_or(""),
+            config_path = Config::file().to_str().unwrap_or(""),
     )
 }
 
-fn get_create_service(exe: &str) -> String {
+fn get_create_service_and_start(exe: &str) -> String {
     let stop = Config::get_option("stop-service") == "Y";
     if stop {
         format!("
@@ -2275,6 +2270,23 @@ sc start {app_name}
                 app_name = crate::get_app_name())
     }
 }
+
+fn get_create_service(exe: &str) -> String {
+    let stop = Config::get_option("stop-service") == "Y";
+
+    format!("
+sc create {app_name} binpath= \"\\\"{exe}\\\" --service\" DisplayName= \"{app_name} Service\"
+",
+            app_name = crate::get_app_name())
+}
+
+fn get_start_service(exe: &str) -> String {
+    format!(
+        "
+            sc start {app_name}
+", app_name = crate::get_app_name())
+}
+
 
 fn run_after_run_cmds(silent: bool) {
     let (_, _, _, exe) = get_install_info();
