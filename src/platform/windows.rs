@@ -1060,11 +1060,6 @@ if exist \"{tmp_path}\\{app_name} Tray.lnk\" del /f /q \"{tmp_path}\\{app_name} 
     );
     let src_exe = std::env::current_exe()?.to_str().unwrap_or("").to_string();
 
-    let install_cert = if options.contains("driverCert") {
-        format!("\"{}\" --install-cert \"RustDeskIddDriver.cer\"", src_exe)
-    } else {
-        "".to_owned()
-    };
 
     // potential bug here: if run_cmd cancelled, but config file is changed.
     if let Some(lic) = get_license() {
@@ -1098,7 +1093,6 @@ cscript \"{uninstall_shortcut}\"
 {shortcuts}
 copy /Y \"{tmp_path}\\Uninstall {app_name}.lnk\" \"{path}\\\"
 {dels}
-{install_cert}
 {after_install}
 {sleep}
     ",
@@ -1195,7 +1189,7 @@ fn write_cmds(cmds: String, ext: &str, tip: &str) -> ResultType<std::path::PathB
     }
     tmp.push(format!("{}_{}.{}", crate::get_app_name(), tip, ext));
     let mut file = std::fs::File::create(&tmp)?;
-    if ext == "bat" {
+    if ext == "bat"  {
         let tmp2 = get_undone_file(&tmp)?;
         std::fs::File::create(&tmp2).ok();
         cmds = format!(
@@ -1242,8 +1236,7 @@ fn run_cmds(cmds: String, show: bool, tip: &str) -> ResultType<()> {
     let tmp = write_cmds(cmds, "bat", tip)?;
     let tmp2 = get_undone_file(&tmp)?;
     let tmp_fn = tmp.to_str().unwrap_or("");
-    let res = runas::Command::new("cmd")
-        .args(&["/C", &tmp_fn])
+    let res = runas::Command::new(&tmp_fn)
         .show(show)
         .force_prompt(true)
         .status();

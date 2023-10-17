@@ -179,7 +179,7 @@ pub fn core_main() -> Option<Vec<String>> {
                 return None;
             } else if args[0] == "--silent-install" {
                 hbb_common::allow_err!(platform::install_me(
-                    "driverCert",
+                    "",
                     "".to_owned(),
                     true,
                     args.len() > 1,
