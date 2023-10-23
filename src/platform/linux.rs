@@ -1191,12 +1191,26 @@ pub fn install_service() -> bool {
     log::info!("Installing service...");
     let cp = switch_service(false);
     if !run_cmds_pkexec(&format!(
-        "{cp} systemctl enable rustdesk; systemctl start rustdesk;"
+        "{cp} systemctl enable rustdesk;"
     )) {
         Config::set_option("stop-service".into(), "Y".into());
         return true;
     }
-    run_me_with(2);
+    //run_me_with(2);
+    std::process::exit(0);
+}
+
+pub fn silent_start_service() -> bool {
+    if !has_cmd("systemctl") {
+        return false;
+    }
+    if !run_cmds_pkexec(&format!(
+        "rustdesk; systemctl start rustdesk"
+    )) {
+        Config::set_option("stop-service".into(), "Y".into());
+        return true;
+    }
+    //run_me_with(2);
     std::process::exit(0);
 }
 
@@ -1209,22 +1223,5 @@ fn check_if_stop_service() {
 }
 
 pub fn check_autostart_config() -> ResultType<()> {
-    let home = std::env::var("HOME").unwrap_or_default();
-    let path = format!("{home}/.config/autostart");
-    let file = format!("{path}/rustdesk.desktop");
-    std::fs::create_dir_all(&path).ok();
-    if !Path::new(&file).exists() {
-        // write text to the desktop file
-        let mut file = std::fs::File::create(&file)?;
-        file.write_all(
-            "
-[Desktop Entry]
-Type=Application
-Exec=rustdesk --tray
-NoDisplay=false
-        "
-            .as_bytes(),
-        )?;
-    }
     Ok(())
 }

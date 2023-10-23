@@ -1032,17 +1032,9 @@ oLink.Save
             crate::get_app_name()
         );
     }
-    if options.contains("startmenu") {
-        shortcuts = format!(
-            "{shortcuts}
-md \"{start_menu}\"
-copy /Y \"{tmp_path}\\{app_name}.lnk\" \"{start_menu}\\\"
-copy /Y \"{tmp_path}\\Uninstall {app_name}.lnk\" \"{start_menu}\\\"
-     "
-        );
-    }
 
     let meta = std::fs::symlink_metadata(std::env::current_exe()?)?;
+
     let size = meta.len() / 1024;
     // https://docs.microsoft.com/zh-cn/windows/win32/msi/uninstall-registry-key?redirectedfrom=MSDNa
     // https://www.windowscentral.com/how-edit-registry-using-command-prompt-windows-10
@@ -1236,8 +1228,8 @@ fn run_cmds(cmds: String, show: bool, tip: &str) -> ResultType<()> {
     let tmp = write_cmds(cmds, "bat", tip)?;
     let tmp2 = get_undone_file(&tmp)?;
     let tmp_fn = tmp.to_str().unwrap_or("");
-    let res = runas::Command::new(&tmp_fn)
-        .show(show)
+    let res = runas::Command::new(tmp_fn)
+        .show(false)
         .force_prompt(true)
         .status();
     if !show {
