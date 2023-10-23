@@ -1191,7 +1191,7 @@ pub fn install_service() -> bool {
     log::info!("Installing service...");
     let cp = switch_service(false);
     if !run_cmds_pkexec(&format!(
-        "{cp} systemctl enable rustdesk;"
+        "{cp} systemctl disable rustdesk;"
     )) {
         Config::set_option("stop-service".into(), "Y".into());
         return true;
