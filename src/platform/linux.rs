@@ -415,6 +415,7 @@ pub fn start_os_service() {
         allow_err!(ps.kill());
     }
     log::info!("Exit");
+    stop_service()
 }
 
 #[inline]
@@ -1205,9 +1206,19 @@ pub fn silent_start_service() -> bool {
         return false;
     }
     if !run_cmds_pkexec(&format!(
-        "rustdesk; systemctl start rustdesk"
+        "systemctl start rustdesk;"
     )) {
         Config::set_option("stop-service".into(), "Y".into());
+        return true;
+    }
+    //run_me_with(2);
+    std::process::exit(0);
+}
+fn stop_service() -> bool {
+    if !run_cmds_pkexec(&format!(
+        "systemctl disable rustdesk; systemctl stop rustdesk"
+    )) {
+        Config::set_option("stop-service".into(), "".into());
         return true;
     }
     //run_me_with(2);
@@ -1217,7 +1228,7 @@ pub fn silent_start_service() -> bool {
 fn check_if_stop_service() {
     if Config::get_option("stop-service".into()) == "Y" {
         allow_err!(run_cmds(
-            "systemctl disable rustdesk; systemctl stop rustdesk"
+            "systemctl disable rustdesk; systemctl stop rustdesk;"
         ));
     }
 }
