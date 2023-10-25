@@ -324,6 +324,7 @@ fn force_stop_server() {
 }
 
 pub fn start_os_service() {
+    check_if_stop_service();
     stop_rustdesk_servers();
     stop_subprocess();
     start_uinput_service();
