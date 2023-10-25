@@ -324,7 +324,6 @@ fn force_stop_server() {
 }
 
 pub fn start_os_service() {
-    check_if_stop_service();
     stop_rustdesk_servers();
     stop_subprocess();
     start_uinput_service();
@@ -414,7 +413,7 @@ pub fn start_os_service() {
     if let Some(ps) = server.take().as_mut() {
         allow_err!(ps.kill());
     }
-    stop_service();
+    check_if_stop_service();
 
     log::info!("Exit");
 }
