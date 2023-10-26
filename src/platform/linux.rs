@@ -414,8 +414,6 @@ pub fn start_os_service() {
     if let Some(ps) = server.take().as_mut() {
         allow_err!(ps.kill());
     }
-    check_if_stop_service();
-
     log::info!("Exit");
 }
 
@@ -1215,23 +1213,18 @@ pub fn silent_start_service() -> bool {
     //run_me_with(2);
     std::process::exit(0);
 }
-fn stop_service() -> bool {
-    if !run_cmds_pkexec(&format!(
-        "systemctl disable rustdesk; systemctl stop rustdesk"
-    )) {
-        Config::set_option("stop-service".into(), "".into());
-        return true;
-    }
-    //run_me_with(2);
-    std::process::exit(0);
-}
+
 
 fn check_if_stop_service() {
-    if Config::get_option("stop-service".into()) == "Y" {
-        allow_err!(run_cmds(
+    allow_err!(run_cmds(
             "systemctl disable rustdesk; systemctl stop rustdesk;"
         ));
-    }
+}
+
+fn check_if_disable_service() {
+    allow_err!(run_cmds(
+            "systemctl disable rustdesk;"
+        ));
 }
 
 pub fn check_autostart_config() -> ResultType<()> {

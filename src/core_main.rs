@@ -289,7 +289,7 @@ pub fn core_main() -> Option<Vec<String>> {
             return None;
         } else if args[0] == "--config" {
             if args.len() == 2 && !args[0].contains("host=") {
-                if is_root() {
+                if crate::platform::is_installed() && is_root() { {
                     // encrypted string used in renaming exe.
                     let name = if args[1].ends_with(".exe") {
                         args[1].to_owned()
