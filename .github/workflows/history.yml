@@ -10,7 +10,7 @@ env:
   # vcpkg version: 2022.05.10
   # for multiarch gcc compatibility
   VCPKG_COMMIT_ID: "501db0f17ef6df184fcdbfbe0f87cde2313b6ab1"
-  VERSION: "${{ inputs.upload-tag }}"
+  VERSION: "1.2.2"
 
 jobs:
   build-for-history-windows:
@@ -58,7 +58,7 @@ jobs:
         run: |
           cd C:\
           git clone https://github.com/Kingtous/rustdesk_thirdpary_lib --depth=1 
-          
+
       - name: Build rustdesk
         env:
           VCPKG_ROOT: C:\rustdesk_thirdpary_lib\vcpkg
@@ -72,7 +72,7 @@ jobs:
           popd
           mkdir -p ./SignOutput
           mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/rustdesk-${{ matrix.job.date }}-${{ matrix.job.target }}.exe
-          
+
       - name: Publish Release
         uses: softprops/action-gh-release@v1
         with:
