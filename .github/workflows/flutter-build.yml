@@ -13,21 +13,16 @@ on:
 env:
   CARGO_NDK_VERSION: "3.1.2"
   LLVM_VERSION: "15.0.6"
-  FLUTTER_VERSION: "3.10.5"
+  FLUTTER_VERSION: "3.10.6"
   FLUTTER_RUST_BRIDGE_VERSION: "1.75.3"
-  # for arm64 linux
-  FLUTTER_ELINUX_VERSION: "3.10.5"
+  FLUTTER_ELINUX_VERSION: "3.10.6"
   FLUTTER_ELINUX_COMMIT_ID: "410b3ca42f2cd0c485edf517a1666652bab442d4"
-  TAG_NAME: "v0.0.1"
-  # vcpkg version: 2023.04.15
-  # for multiarch gcc compatibility
+  TAG_NAME: "${{ inputs.upload-tag }}"
   VCPKG_COMMIT_ID: "501db0f17ef6df184fcdbfbe0f87cde2313b6ab1"
-  VERSION: "v0.0.1"
+  VERSION: "1.2.4"
   NDK_VERSION: "r25c"
-  #signing keys env variable checks
   ANDROID_SIGNING_KEY: '${{ secrets.ANDROID_SIGNING_KEY }}'
   MACOS_P12_BASE64: '${{ secrets.MACOS_P12_BASE64 }}'
-  # To make a custom build with your own servers set the below secret values
   RS_PUB_KEY: '${{ secrets.RS_PUB_KEY }}'
   RENDEZVOUS_SERVER: '${{ secrets.RENDEZVOUS_SERVER }}'
   UPLOAD_ARTIFACT: "${{ inputs.upload-artifact }}"
@@ -60,6 +55,13 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
+      # - name: Replace engine with rustdesk custom flutter engine
+      #   run: |
+      #     flutter doctor -v
+      #     flutter precache --windows
+      #     Invoke-WebRequest -Uri https://github.com/Kingtous/engine/releases/download/v3.7.0-rustdesk/windows-x64-release-flutter.zip -OutFile windows-x64-flutter-release.zip
+      #     Expand-Archive windows-x64-flutter-release.zip -DestinationPath engine
+      #     mv -Force engine/*  C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -75,6 +77,7 @@ jobs:
 
       - name: Install flutter rust bridge deps
         run: |
+          git config --global core.longpaths true
           cargo install flutter_rust_bridge_codegen --version ${{ env.FLUTTER_RUST_BRIDGE_VERSION }} --features "uuid"
           Push-Location flutter ; flutter pub get ; Pop-Location
           ~/.cargo/bin/flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart
@@ -88,6 +91,22 @@ jobs:
         env:
           VCPKG_ROOT: C:\rustdesk_thirdpary_lib\vcpkg
         run: python3 .\build.py --portable --hwcodec --flutter --feature IddDriver
+
+      - name: find Runner.res
+        # Windows: find Runner.res (compiled from ./flutter/windows/runner/Runner.rc), copy to ./Runner.res
+        # Runner.rc does not contain actual version, but Runner.res does
+        continue-on-error: true
+        shell: bash
+        run: |
+          runner_res=$(find . -name "Runner.res");
+          if [ "$runner_res" == "" ]; then
+            echo "Runner.res: not found";
+          else
+            echo "Runner.res: $runner_res";
+            cp $runner_res ./libs/portable/Runner.res;
+            echo "list ./libs/portable/Runner.res";
+            ls -l ./libs/portable/Runner.res;
+          fi
 
       - name: Sign rustdesk files
         uses: GermanBluefox/code-sign-action@v7
@@ -137,10 +156,159 @@ jobs:
   generate-bridge-linux:
     uses: ./.github/workflows/bridge.yml
 
-  build-rustdesk-lib-linux-arm:
-    needs: [ generate-bridge-linux, build-vcpkg-deps-linux ]
+  build-rustdesk-lib-linux-amd64:
+    needs: [generate-bridge-linux, build-vcpkg-deps-linux]
     name: build-rust-lib ${{ matrix.job.target }} (${{ matrix.job.os }}) [${{ matrix.job.extra-build-features }}]
-    runs-on: ubuntu-20.04
+    runs-on: ${{ matrix.job.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # use a high level qemu-user-static
+        job:
+          # - { target: i686-unknown-linux-gnu      , os: ubuntu-20.04, use-cross: true }
+          # - { target: i686-unknown-linux-musl     , os: ubuntu-20.04, use-cross: true }
+          - {
+            arch: x86_64,
+            target: x86_64-unknown-linux-gnu,
+            os: ubuntu-20.04,
+            extra-build-features: "",
+            enable-headless: true
+          }
+          - {
+            arch: x86_64,
+            target: x86_64-unknown-linux-gnu,
+            os: ubuntu-20.04,
+            extra-build-features: "flatpak",
+            enable-headless: false
+          }
+          - {
+            arch: x86_64,
+            target: x86_64-unknown-linux-gnu,
+            os: ubuntu-20.04,
+            extra-build-features: "appimage",
+            enable-headless: false
+          }
+          # - { target: x86_64-unknown-linux-musl   , os: ubuntu-20.04, use-cross: true }
+    steps:
+      - name: Maximize build space
+        run: |
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo apt update -y
+          sudo apt install qemu-user-static -y
+
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 12
+
+      - name: Free Space
+        run: |
+          df -h
+          free -m
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.job.target }}
+          override: true
+          profile: minimal # minimal component installation (ie, no documentation)
+
+      - name: Save Rust toolchain version
+        run: |
+          RUST_TOOLCHAIN_VERSION=$(cargo --version | awk '{print $2}')
+          echo "RUST_TOOLCHAIN_VERSION=$RUST_TOOLCHAIN_VERSION" >> $GITHUB_ENV
+
+      - name: Disable rust bridge build
+        run: |
+          # only build cdylib
+          sed -i  "s/\[\"cdylib\", \"staticlib\", \"rlib\"\]/\[\"cdylib\"\]/g" Cargo.toml
+
+      - name: Restore bridge files
+        uses: actions/download-artifact@master
+        with:
+          name: bridge-artifact
+          path: ./
+
+      - name: Restore vcpkg files
+        uses: actions/download-artifact@master
+        with:
+          name: vcpkg-artifact-${{ matrix.job.arch }}
+          path: /opt/artifacts/vcpkg/installed
+
+      - uses: rustdesk-org/run-on-arch-action@amd64-support
+        name: Build rustdesk library for ${{ matrix.job.arch }}
+        id: vcpkg
+        with:
+          arch: ${{ matrix.job.arch }}
+          distro: ubuntu18.04
+          # not ready yet
+          # distro: ubuntu18.04-rustdesk
+          githubToken: ${{ github.token }}
+          setup: |
+            ls -l "${PWD}"
+            ls -l /opt/artifacts/vcpkg/installed
+          dockerRunArgs: |
+            --volume "${PWD}:/workspace"
+            --volume "/opt/artifacts:/opt/artifacts"
+          shell: /bin/bash
+          install: |
+            apt update -y
+            echo -e "installing deps"
+            apt-get -qq install -y  git curl wget nasm yasm libgtk-3-dev clang libxcb-randr0-dev libxdo-dev libxfixes-dev libxcb-shape0-dev libxcb-xfixes0-dev libasound2-dev libpulse-dev cmake libclang-dev ninja-build libappindicator3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libvdpau-dev libva-dev libpam0g-dev libclang-dev llvm-dev libclang-10-dev llvm-10-dev pkg-config tree g++ gcc libvpx-dev tree > /dev/null
+            # we have libopus compiled by us.
+            apt remove -y libopus-dev || true
+            # output devs
+            ls -l ./
+            tree -L 3 /opt/artifacts/vcpkg/installed
+          run: |
+            # disable git safe.directory
+            git config --global --add safe.directory "*"
+            # rust
+            pushd /opt
+            # do not use rustup, because memory overflow in qemu
+            wget -O rust.tar.gz https://static.rust-lang.org/dist/rust-${{env.RUST_TOOLCHAIN_VERSION}}-${{ matrix.job.target }}.tar.gz
+            tar -zxvf rust.tar.gz > /dev/null && rm rust.tar.gz
+            cd rust-${{env.RUST_TOOLCHAIN_VERSION}}-${{ matrix.job.target }} && ./install.sh
+            rm -rf rust-${{env.RUST_TOOLCHAIN_VERSION}}-${{ matrix.job.target }}
+            # edit config
+            mkdir -p ~/.cargo/
+            echo """
+              [source.crates-io]
+              registry = 'https://github.com/rust-lang/crates.io-index'
+            """ > ~/.cargo/config
+            cat ~/.cargo/config
+            # start build
+            pushd /workspace
+            # mock 
+            case "${{ matrix.job.arch }}" in
+              x86_64)
+                # no need mock on x86_64
+                export VCPKG_ROOT=/opt/artifacts/vcpkg
+                export DEFAULT_FEAT=""
+                if ${{ matrix.job.enable-headless }}; then
+                  export DEFAULT_FEAT=linux_headless
+                fi
+                cargo build --lib --features hwcodec,flutter,flutter_texture_render,${{ matrix.job.extra-build-features }},$DEFAULT_FEAT --release
+                ;;
+            esac
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@master
+        with:
+          name: librustdesk-${{ matrix.job.arch }}-${{ matrix.job.extra-build-features }}.so
+          path: target/release/liblibrustdesk.so
+
+  build-rustdesk-lib-linux-arm:
+    if: ${{ inputs.upload-artifact }}
+    needs: [generate-bridge-linux, build-vcpkg-deps-linux]
+    name: build-rust-lib ${{ matrix.job.target }} (${{ matrix.job.os }}) [${{ matrix.job.extra-build-features }}]
+    runs-on: [self-hosted, Linux, ARM64]
     strategy:
       fail-fast: false
       matrix:
@@ -280,150 +448,9 @@ jobs:
           name: librustdesk-${{ matrix.job.arch }}-${{ matrix.job.extra-build-features }}.so
           path: target/release/liblibrustdesk.so
 
-  build-rustdesk-lib-linux-amd64:
-    needs: [ generate-bridge-linux, build-vcpkg-deps-linux ]
-    name: build-rust-lib ${{ matrix.job.target }} (${{ matrix.job.os }}) [${{ matrix.job.extra-build-features }}]
-    runs-on: ubuntu-20.04
-    strategy:
-      fail-fast: false
-      matrix:
-        # use a high level qemu-user-static
-        job:
-          # - { target: i686-unknown-linux-gnu      , os: ubuntu-20.04, use-cross: true }
-          # - { target: i686-unknown-linux-musl     , os: ubuntu-20.04, use-cross: true }
-          - {
-            arch: x86_64,
-            target: x86_64-unknown-linux-gnu,
-            os: ubuntu-20.04,
-            extra-build-features: "",
-            enable-headless: true
-          }
-          - {
-            arch: x86_64,
-            target: x86_64-unknown-linux-gnu,
-            os: ubuntu-20.04,
-            extra-build-features: "appimage",
-            enable-headless: false
-          }
-          # - { target: x86_64-unknown-linux-musl   , os: ubuntu-20.04, use-cross: true }
-    steps:
-      - name: Maximize build space
-        run: |
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /usr/share/dotnet
-          sudo apt update -y
-          sudo apt install qemu-user-static -y
-
-      - name: Checkout source code
-        uses: actions/checkout@v3
-
-      - name: Set Swap Space
-        uses: pierotofy/set-swap-space@master
-        with:
-          swap-size-gb: 12
-
-      - name: Free Space
-        run: |
-          df -h
-          free -m
-
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: ${{ matrix.job.target }}
-          override: true
-          profile: minimal # minimal component installation (ie, no documentation)
-
-      - name: Save Rust toolchain version
-        run: |
-          RUST_TOOLCHAIN_VERSION=$(cargo --version | awk '{print $2}')
-          echo "RUST_TOOLCHAIN_VERSION=$RUST_TOOLCHAIN_VERSION" >> $GITHUB_ENV
-
-      - name: Disable rust bridge build
-        run: |
-          # only build cdylib
-          sed -i  "s/\[\"cdylib\", \"staticlib\", \"rlib\"\]/\[\"cdylib\"\]/g" Cargo.toml
-
-      - name: Restore bridge files
-        uses: actions/download-artifact@master
-        with:
-          name: bridge-artifact
-          path: ./
-
-      - name: Restore vcpkg files
-        uses: actions/download-artifact@master
-        with:
-          name: vcpkg-artifact-${{ matrix.job.arch }}
-          path: /opt/artifacts/vcpkg/installed
-
-      - uses: rustdesk-org/run-on-arch-action@amd64-support
-        name: Build rustdesk library for ${{ matrix.job.arch }}
-        id: vcpkg
-        with:
-          arch: ${{ matrix.job.arch }}
-          distro: ubuntu18.04
-          # not ready yet
-          # distro: ubuntu18.04-rustdesk
-          githubToken: ${{ github.token }}
-          setup: |
-            ls -l "${PWD}"
-            ls -l /opt/artifacts/vcpkg/installed
-          dockerRunArgs: |
-            --volume "${PWD}:/workspace"
-            --volume "/opt/artifacts:/opt/artifacts"
-          shell: /bin/bash
-          install: |
-            apt update -y
-            echo -e "installing deps"
-            apt-get -qq install -y  git curl wget nasm yasm libgtk-3-dev clang libxcb-randr0-dev libxdo-dev libxfixes-dev libxcb-shape0-dev libxcb-xfixes0-dev libasound2-dev libpulse-dev cmake libclang-dev ninja-build libappindicator3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libvdpau-dev libva-dev libpam0g-dev libclang-dev llvm-dev libclang-10-dev llvm-10-dev pkg-config tree g++ gcc libvpx-dev tree > /dev/null
-            # we have libopus compiled by us.
-            apt remove -y libopus-dev || true
-            # output devs
-            ls -l ./
-            tree -L 3 /opt/artifacts/vcpkg/installed
-          run: |
-            # disable git safe.directory
-            git config --global --add safe.directory "*"
-            # rust
-            pushd /opt
-            # do not use rustup, because memory overflow in qemu
-            wget -O rust.tar.gz https://static.rust-lang.org/dist/rust-${{env.RUST_TOOLCHAIN_VERSION}}-${{ matrix.job.target }}.tar.gz
-            tar -zxvf rust.tar.gz > /dev/null && rm rust.tar.gz
-            cd rust-${{env.RUST_TOOLCHAIN_VERSION}}-${{ matrix.job.target }} && ./install.sh
-            rm -rf rust-${{env.RUST_TOOLCHAIN_VERSION}}-${{ matrix.job.target }}
-            # edit config
-            mkdir -p ~/.cargo/
-            echo """
-              [source.crates-io]
-              registry = 'https://github.com/rust-lang/crates.io-index'
-            """ > ~/.cargo/config
-            cat ~/.cargo/config
-            # start build
-            pushd /workspace
-            # mock 
-            case "${{ matrix.job.arch }}" in
-              x86_64)
-                # no need mock on x86_64
-                export VCPKG_ROOT=/opt/artifacts/vcpkg
-                export DEFAULT_FEAT=""
-                if ${{ matrix.job.enable-headless }}; then
-                  export DEFAULT_FEAT=linux_headless
-                fi
-                cargo build --lib --features hwcodec,flutter,flutter_texture_render,${{ matrix.job.extra-build-features }},$DEFAULT_FEAT --release
-                ;;
-            esac
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@master
-        with:
-          name: librustdesk-${{ matrix.job.arch }}-${{ matrix.job.extra-build-features }}.so
-          path: target/release/liblibrustdesk.so
-
-
   build-rustdesk-linux-arm:
-    needs: [ build-rustdesk-lib-linux-arm ]
+    if: ${{ inputs.upload-artifact }}
+    needs: [build-rustdesk-lib-linux-arm]
     name: build-rustdesk ${{ matrix.job.target }} (${{ matrix.job.os }}) [${{ matrix.job.extra-build-features }}]
     runs-on: ubuntu-20.04 # 20.04 has more performance on arm build
     strategy:
@@ -686,7 +713,7 @@ jobs:
             /opt/artifacts/rpm/*.rpm
 
   build-rustdesk-linux-amd64:
-    needs: [ build-rustdesk-lib-linux-amd64 ]
+    needs: [build-rustdesk-lib-linux-amd64]
     name: build-rustdesk ${{ matrix.job.target }} (${{ matrix.job.os }}) [${{ matrix.job.extra-build-features }}]
     runs-on: ubuntu-20.04
     strategy:
@@ -700,6 +727,12 @@ jobs:
             target: x86_64-unknown-linux-gnu,
             os: ubuntu-18.04,
             extra-build-features: "",
+          }
+          - {
+            arch: x86_64,
+            target: x86_64-unknown-linux-gnu,
+            os: ubuntu-18.04,
+            extra-build-features: "flatpak",
           }
           - {
             arch: x86_64,
@@ -790,23 +823,21 @@ jobs:
         run: |
           for name in rustdesk*??.deb; do
               # use cp to duplicate deb files to fit other packages.
-              cp "$name" "rustdesk-${{ matrix.job.arch }}.deb"
-              echo "Renamed $name to ${name%%.deb}-${{ matrix.job.arch }}.deb"
-              cp "$name" "rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.deb"
-              echo "Renamed $name to rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.deb"
+              cp "$name" "${name%%.deb}-${{ matrix.job.arch }}.deb"
           done
 
       - name: Publish debian package
-        if: env.UPLOAD_ARTIFACT == 'true'
+        if: matrix.job.extra-build-features == '' && env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@v1
         with:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
             rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.deb
+
       - name: Upload Artifact
         uses: actions/upload-artifact@master
-        if: env.UPLOAD_ARTIFACT == 'true'
+        if: ${{ contains(matrix.job.extra-build-features, 'flatpak') }}
         with:
           name: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.deb
           path: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.deb
@@ -886,4 +917,11 @@ jobs:
           files: |
             ./appimage/rustdesk-${{ env.VERSION }}-*.AppImage
 
-
+      - name: Publish fedora package
+        if: matrix.job.extra-build-features == '' && env.UPLOAD_ARTIFACT == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          tag_name: ${{ env.TAG_NAME }}
+          files: |
+            /opt/artifacts/rpm/*.rpm
