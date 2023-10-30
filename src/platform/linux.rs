@@ -1216,9 +1216,11 @@ pub fn silent_start_service() -> bool {
 
 
 fn check_if_stop_service() {
-    allow_err!(run_cmds(
-            "systemctl disable rustdesk; systemctl stop rustdesk;"
+    if Config::get_option("stop-service".into()) == "Y" {
+        allow_err!(run_cmds(
+            "systemctl disable rustdesk; systemctl stop rustdesk"
         ));
+    }
 }
 
 fn check_if_disable_service() {
