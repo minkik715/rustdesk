@@ -56,11 +56,8 @@ impl BinaryData {
             let md5_record = String::from_utf8_lossy(self.md5_code);
             if digest == md5_record {
                 // same, skip this file
-                println!("skip {}", &self.path);
                 return;
             } else {
-                println!("writing {}", p.display());
-                println!("{} -> {}", md5_record, digest)
             }
         }
         let _ = fs::write(p, self.decompress());

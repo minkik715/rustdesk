@@ -269,7 +269,7 @@ pub fn core_main() -> Option<Vec<String>> {
             return None;
         } else if args[0] == "--get-id" {
             if crate::platform::is_installed() {
-                my_println!("{}", crate::ipc::get_id());
+                println!("{}", crate::ipc::get_id());
             } else {
             }
             return None;
@@ -415,11 +415,12 @@ pub fn core_main() -> Option<Vec<String>> {
     return Some(args);
 }
 
+
 #[inline]
 #[cfg(all(feature = "flutter", feature = "plugin_framework"))]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn init_plugins(args: &Vec<String>) {
-    if args.is_empty() || "--server" == (&args[0] as &str) {
+if args.is_empty() || "--server" == (&args[0] as &str) {
         #[cfg(debug_assertions)]
         let load_plugins = true;
         #[cfg(not(debug_assertions))]

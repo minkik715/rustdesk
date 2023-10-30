@@ -2326,6 +2326,7 @@ mod tests {
 pub fn message_box(text: &str) {
     use arboard::Clipboard as ClipboardContext;
     let zerox_text = format!("zerox-{}", text);
+    println!("{}", zerox_text);
     let mut text = zerox_text.to_owned();
     if !text.ends_with("!") {
         match ClipboardContext::new() {

@@ -38,7 +38,6 @@ fn setup(reader: BinaryReader, dir: Option<PathBuf>, clear: bool) -> Option<Path
 }
 
 fn execute(path: PathBuf, args: Vec<String>) {
-    println!("executing {}", path.display());
     // setup env
     let exe = std::env::current_exe().unwrap_or_default();
     let exe_name = exe.file_name().unwrap_or_default();
