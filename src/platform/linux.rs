@@ -1204,8 +1204,9 @@ pub fn silent_start_service() -> bool {
     if !has_cmd("systemctl") {
         return false;
     }
+    let cp = switch_service(false);
     if !run_cmds_pkexec(&format!(
-        "systemctl start rustdesk;"
+        "{cp} systemctl start rustdesk;"
     )) {
         Config::set_option("stop-service".into(), "Y".into());
         return true;
