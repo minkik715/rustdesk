@@ -1200,18 +1200,8 @@ pub fn install_service() -> bool {
     std::process::exit(0);
 }
 
-pub fn silent_start_service() -> bool {
-    if !has_cmd("systemctl") {
-        return false;
-    }
-    if !run_cmds_pkexec(&format!(
-        "systemctl start rustdesk;"
-    )) {
-        Config::set_option("stop-service".into(), "Y".into());
-        return true;
-    }
-    //run_me_with(2);
-    std::process::exit(0);
+pub fn silent_start_service() {
+    start_os_service()
 }
 
 
