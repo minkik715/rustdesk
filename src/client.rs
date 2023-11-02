@@ -3,10 +3,7 @@ use std::{
     net::SocketAddr,
     ops::Deref,
     str::FromStr,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        mpsc, Arc, Mutex, RwLock,
-    },
+    sync::{mpsc, Arc, Mutex, RwLock},
 };
 
 pub use async_trait::async_trait;
@@ -57,7 +54,11 @@ use scrap::{
     ImageFormat, ImageRgb,
 };
 
-use crate::is_keyboard_mode_supported;
+use crate::{
+    common::input::{MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_TYPE_DOWN, MOUSE_TYPE_UP},
+    is_keyboard_mode_supported,
+    ui_session_interface::{InvokeUiSession, Session},
+};
 
 #[cfg(not(feature = "flutter"))]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -248,7 +249,7 @@ impl Client {
                     crate::check_port(peer, RELAY_PORT + 1),
                     CONNECT_TIMEOUT,
                 )
-                    .await?,
+                .await?,
                 true,
                 None,
             ));
@@ -360,7 +361,7 @@ impl Client {
                             conn_type,
                             my_addr.is_ipv4(),
                         )
-                            .await?;
+                        .await?;
                         let pk =
                             Self::secure_connection(peer, signed_id_pk, key, &mut conn).await?;
                         return Ok((conn, false, pk));
@@ -402,7 +403,7 @@ impl Client {
             conn_type,
             interface,
         )
-            .await
+        .await
     }
 
     /// Connect to the peer.
@@ -472,7 +473,7 @@ impl Client {
                     token,
                     conn_type,
                 )
-                    .await;
+                .await;
                 interface.update_direct(Some(false));
                 if let Err(e) = conn {
                     bail!("Failed to connect via relay server: {}", e);
@@ -650,8 +651,8 @@ impl Client {
             socket_client::ipv4_to_ipv6(crate::check_port(relay_server, RELAY_PORT), ipv4),
             CONNECT_TIMEOUT,
         )
-            .await
-            .with_context(|| "Failed to connect to relay server")?;
+        .await
+        .with_context(|| "Failed to connect to relay server")?;
         let mut msg_out = RendezvousMessage::new();
         msg_out.set_request_relay(RequestRelay {
             licence_key: key.to_owned(),
@@ -672,9 +673,12 @@ impl Client {
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    fn try_stop_clipboard(_self_uuid: &uuid::Uuid) {
+    fn try_stop_clipboard(_self_id: &str) {
         #[cfg(feature = "flutter")]
-        if crate::flutter::other_sessions_running(_self_uuid) {
+        if crate::flutter::sessions::other_sessions_running(
+            _self_id.to_string(),
+            ConnType::DEFAULT_CONN,
+        ) {
             return;
         }
         TEXT_CLIPBOARD_STATE.lock().unwrap().running = false;
@@ -995,25 +999,34 @@ pub struct VideoHandler {
     pub rgb: ImageRgb,
     recorder: Arc<Mutex<Option<Recorder>>>,
     record: bool,
+    _display: usize, // useful for debug
 }
 
 impl VideoHandler {
     /// Create a new video handler.
-    pub fn new() -> Self {
+    pub fn new(_display: usize) -> Self {
+        log::info!("new video handler for display #{_display}");
         VideoHandler {
             decoder: Decoder::new(),
             rgb: ImageRgb::new(ImageFormat::ARGB, crate::DST_STRIDE_RGBA),
             recorder: Default::default(),
             record: false,
+            _display,
         }
     }
 
     /// Handle a new video frame.
     #[inline]
-    pub fn handle_frame(&mut self, vf: VideoFrame) -> ResultType<bool> {
+    pub fn handle_frame(
+        &mut self,
+        vf: VideoFrame,
+        chroma: &mut Option<Chroma>,
+    ) -> ResultType<bool> {
         match &vf.union {
             Some(frame) => {
-                let res = self.decoder.handle_video_frame(frame, &mut self.rgb);
+                let res = self
+                    .decoder
+                    .handle_video_frame(frame, &mut self.rgb, chroma);
                 if self.record {
                     self.recorder
                         .lock()
@@ -1046,7 +1059,7 @@ impl VideoHandler {
                 format: scrap::CodecFormat::VP9,
                 tx: None,
             })
-                .map_or(Default::default(), |r| Arc::new(Mutex::new(Some(r))));
+            .map_or(Default::default(), |r| Arc::new(Mutex::new(Some(r))));
         } else {
             self.recorder = Default::default();
         }
@@ -1122,7 +1135,7 @@ impl LoginConfigHandler {
         self.session_id = sid;
         self.supported_encoding = Default::default();
         self.restarting_remote_device = false;
-        self.force_relay = !self.get_option("force-always-relay").is_empty() || true;
+        self.force_relay = !self.get_option("force-always-relay").is_empty() || force_relay;
         self.direct = None;
         self.received = false;
         self.switch_uuid = switch_uuid;
@@ -1192,6 +1205,39 @@ impl LoginConfigHandler {
         self.save_config(config);
     }
 
+    /// Save reverse mouse wheel ("", "Y") to the current config.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The reverse mouse wheel ("", "Y").
+    pub fn save_reverse_mouse_wheel(&mut self, value: String) {
+        let mut config = self.load_config();
+        config.reverse_mouse_wheel = value;
+        self.save_config(config);
+    }
+
+    /// Save "displays_as_individual_windows" ("", "Y") to the current config.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The "displays_as_individual_windows" value ("", "Y").
+    pub fn save_displays_as_individual_windows(&mut self, value: String) {
+        let mut config = self.load_config();
+        config.displays_as_individual_windows = value;
+        self.save_config(config);
+    }
+
+    /// Save "use_all_my_displays_for_the_remote_session" ("", "Y") to the current config.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The "use_all_my_displays_for_the_remote_session" value ("", "Y").
+    pub fn save_use_all_my_displays_for_the_remote_session(&mut self, value: String) {
+        let mut config = self.load_config();
+        config.use_all_my_displays_for_the_remote_session = value;
+        self.save_config(config);
+    }
+
     /// Save scroll style to the current config.
     ///
     /// # Arguments
@@ -1248,7 +1294,7 @@ impl LoginConfigHandler {
             } else {
                 BoolOption::No
             })
-                .into();
+            .into();
         } else if name == "disable-audio" {
             config.disable_audio.v = !config.disable_audio.v;
             option.disable_audio = (if config.disable_audio.v {
@@ -1256,7 +1302,7 @@ impl LoginConfigHandler {
             } else {
                 BoolOption::No
             })
-                .into();
+            .into();
         } else if name == "disable-clipboard" {
             config.disable_clipboard.v = !config.disable_clipboard.v;
             option.disable_clipboard = (if config.disable_clipboard.v {
@@ -1264,7 +1310,7 @@ impl LoginConfigHandler {
             } else {
                 BoolOption::No
             })
-                .into();
+            .into();
         } else if name == "lock-after-session-end" {
             config.lock_after_session_end.v = !config.lock_after_session_end.v;
             option.lock_after_session_end = (if config.lock_after_session_end.v {
@@ -1272,7 +1318,7 @@ impl LoginConfigHandler {
             } else {
                 BoolOption::No
             })
-                .into();
+            .into();
         } else if name == "privacy-mode" {
             // try toggle privacy mode
             option.privacy_mode = (if config.privacy_mode.v {
@@ -1280,7 +1326,7 @@ impl LoginConfigHandler {
             } else {
                 BoolOption::Yes
             })
-                .into();
+            .into();
         } else if name == "enable-file-transfer" {
             config.enable_file_transfer.v = !config.enable_file_transfer.v;
             option.enable_file_transfer = (if config.enable_file_transfer.v {
@@ -1288,7 +1334,7 @@ impl LoginConfigHandler {
             } else {
                 BoolOption::No
             })
-                .into();
+            .into();
         } else if name == "block-input" {
             option.block_input = BoolOption::Yes.into();
         } else if name == "unblock-input" {
@@ -1509,6 +1555,15 @@ impl LoginConfigHandler {
         msg_out
     }
 
+    /// Create a [`Message`] for refreshing video.
+    pub fn refresh_display(display: usize) -> Message {
+        let mut misc = Misc::new();
+        misc.set_refresh_video_display(display as _);
+        let mut msg_out = Message::new();
+        msg_out.set_misc(misc);
+        msg_out
+    }
+
     /// Create a [`Message`] for saving custom image quality.
     ///
     /// # Arguments
@@ -1714,9 +1769,9 @@ impl LoginConfigHandler {
         password: Vec<u8>,
     ) -> Message {
         #[cfg(any(target_os = "android", target_os = "ios"))]
-            let my_id = Config::get_id_or(crate::DEVICE_ID.lock().unwrap().clone());
+        let my_id = Config::get_id_or(crate::DEVICE_ID.lock().unwrap().clone());
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
-            let my_id = Config::get_id();
+        let my_id = Config::get_id();
         let mut lr = LoginRequest {
             username: self.id.clone(),
             password: password.into(),
@@ -1730,7 +1785,7 @@ impl LoginConfigHandler {
                 password: os_password,
                 ..Default::default()
             })
-                .into(),
+            .into(),
             ..Default::default()
         };
         match self.conn_type {
@@ -1775,15 +1830,22 @@ impl LoginConfigHandler {
 
 /// Media data.
 pub enum MediaData {
-    VideoQueue,
+    VideoQueue(usize),
     VideoFrame(Box<VideoFrame>),
     AudioFrame(Box<AudioFrame>),
     AudioFormat(AudioFormat),
-    Reset,
-    RecordScreen(bool, i32, i32, String),
+    Reset(usize),
+    RecordScreen(bool, usize, i32, i32, String),
 }
 
 pub type MediaSender = mpsc::Sender<MediaData>;
+
+struct VideoHandlerController {
+    handler: VideoHandler,
+    count: u128,
+    duration: std::time::Duration,
+    skip_beginning: u32,
+}
 
 /// Start video and audio thread.
 /// Return two [`MediaSender`], they should be given to the media producer.
@@ -1791,73 +1853,147 @@ pub type MediaSender = mpsc::Sender<MediaData>;
 /// # Arguments
 ///
 /// * `video_callback` - The callback for video frame. Being called when a video frame is ready.
-pub fn start_video_audio_threads<F>(
+pub fn start_video_audio_threads<F, T>(
+    session: Session<T>,
     video_callback: F,
 ) -> (
     MediaSender,
     MediaSender,
-    Arc<ArrayQueue<VideoFrame>>,
-    Arc<AtomicUsize>,
+    Arc<RwLock<HashMap<usize, ArrayQueue<VideoFrame>>>>,
+    Arc<RwLock<HashMap<usize, usize>>>,
+    Arc<RwLock<Option<Chroma>>>,
 )
-    where
-        F: 'static + FnMut(&mut scrap::ImageRgb) + Send,
+where
+    F: 'static + FnMut(usize, &mut scrap::ImageRgb) + Send,
+    T: InvokeUiSession,
 {
     let (video_sender, video_receiver) = mpsc::channel::<MediaData>();
-    let video_queue = Arc::new(ArrayQueue::<VideoFrame>::new(VIDEO_QUEUE_SIZE));
-    let video_queue_cloned = video_queue.clone();
+    let video_queue_map: Arc<RwLock<HashMap<usize, ArrayQueue<VideoFrame>>>> = Default::default();
+    let video_queue_map_cloned = video_queue_map.clone();
     let mut video_callback = video_callback;
-    let mut duration = std::time::Duration::ZERO;
-    let mut count = 0;
-    let fps = Arc::new(AtomicUsize::new(0));
-    let decode_fps = fps.clone();
-    let mut skip_beginning = 0;
+    let fps_map = Arc::new(RwLock::new(HashMap::new()));
+    let decode_fps_map = fps_map.clone();
+    let chroma = Arc::new(RwLock::new(None));
+    let chroma_cloned = chroma.clone();
+    let mut last_chroma = None;
 
     std::thread::spawn(move || {
         #[cfg(windows)]
         sync_cpu_usage();
-        let mut video_handler = VideoHandler::new();
+        let mut handler_controller_map = Vec::new();
+        // let mut count = Vec::new();
+        // let mut duration = std::time::Duration::ZERO;
+        // let mut skip_beginning = Vec::new();
         loop {
             if let Ok(data) = video_receiver.recv() {
                 match data {
-                    MediaData::VideoFrame(_) | MediaData::VideoQueue => {
-                        let vf = if let MediaData::VideoFrame(vf) = data {
-                            *vf
-                        } else {
-                            if let Some(vf) = video_queue.pop() {
-                                vf
-                            } else {
+                    MediaData::VideoFrame(_) | MediaData::VideoQueue(_) => {
+                        let vf = match data {
+                            MediaData::VideoFrame(vf) => *vf,
+                            MediaData::VideoQueue(display) => {
+                                if let Some(video_queue) =
+                                    video_queue_map.read().unwrap().get(&display)
+                                {
+                                    if let Some(vf) = video_queue.pop() {
+                                        vf
+                                    } else {
+                                        continue;
+                                    }
+                                } else {
+                                    continue;
+                                }
+                            }
+                            _ => {
+                                // unreachable!();
                                 continue;
                             }
                         };
+                        let display = vf.display as usize;
                         let start = std::time::Instant::now();
-                        if let Ok(true) = video_handler.handle_frame(vf) {
-                            video_callback(&mut video_handler.rgb);
-                            // fps calculation
-                            // The first frame will be very slow
-                            if skip_beginning < 5 {
-                                skip_beginning += 1;
-                                continue;
+                        if handler_controller_map.len() <= display {
+                            for _i in handler_controller_map.len()..=display {
+                                handler_controller_map.push(VideoHandlerController {
+                                    handler: VideoHandler::new(_i),
+                                    count: 0,
+                                    duration: std::time::Duration::ZERO,
+                                    skip_beginning: 0,
+                                });
                             }
-                            duration += start.elapsed();
-                            count += 1;
-                            if count % 10 == 0 {
-                                fps.store(
-                                    (count * 1000 / duration.as_millis()) as usize,
-                                    Ordering::Relaxed,
-                                );
-                            }
-                            // Clear to get real-time fps
-                            if count > 150 {
-                                count = 0;
-                                duration = Duration::ZERO;
+                        }
+                        if let Some(handler_controller) = handler_controller_map.get_mut(display) {
+                            let mut tmp_chroma = None;
+                            match handler_controller.handler.handle_frame(vf, &mut tmp_chroma) {
+                                Ok(true) => {
+                                    video_callback(display, &mut handler_controller.handler.rgb);
+
+                                    // chroma
+                                    if tmp_chroma.is_some() && last_chroma != tmp_chroma {
+                                        last_chroma = tmp_chroma;
+                                        *chroma.write().unwrap() = tmp_chroma;
+                                    }
+
+                                    // fps calculation
+                                    // The first frame will be very slow
+                                    if handler_controller.skip_beginning < 5 {
+                                        handler_controller.skip_beginning += 1;
+                                        continue;
+                                    }
+
+                                    handler_controller.duration += start.elapsed();
+                                    handler_controller.count += 1;
+                                    if handler_controller.count % 10 == 0 {
+                                        fps_map.write().unwrap().insert(
+                                            display,
+                                            (handler_controller.count * 1000
+                                                / handler_controller.duration.as_millis())
+                                                as usize,
+                                        );
+                                    }
+                                    // Clear to get real-time fps
+                                    if handler_controller.count > 150 {
+                                        handler_controller.count = 0;
+                                        handler_controller.duration = Duration::ZERO;
+                                    }
+                                }
+                                Err(e) => {
+                                    // This is a simple workaround.
+                                    //
+                                    // I only see the following error:
+                                    // FailedCall("errcode=1 scrap::common::vpxcodec:libs\\scrap\\src\\common\\vpxcodec.rs:433:9")
+                                    // When switching from all displays to one display, the error occurs.
+                                    // eg:
+                                    // 1. Connect to a device with two displays (A and B).
+                                    // 2. Switch to display A. The error occurs.
+                                    // 3. If the error does not occur. Switch from A to display B. The error occurs.
+                                    //
+                                    // to-do: fix the error
+                                    log::error!("handle video frame error, {}", e);
+                                    session.refresh_video(display as _);
+                                }
+                                _ => {}
                             }
                         }
                     }
-                    MediaData::Reset => {
-                        video_handler.reset();
+                    MediaData::Reset(display) => {
+                        if let Some(handler_controler) = handler_controller_map.get_mut(display) {
+                            handler_controler.handler.reset();
+                        }
                     }
-                    MediaData::RecordScreen(start, w, h, id) => {
-                        video_handler.record_screen(start, w, h, id)
+                    MediaData::RecordScreen(start, display, w, h, id) => {
+                        log::info!("record screen command: start:{start}, display:{display}");
+                        if handler_controller_map.len() == 1 {
+                            // Compatible with the sciter version(single ui session).
+                            // For the sciter version, there're no multi-ui-sessions for one connection.
+                            // The display is always 0, video_handler_controllers.len() is always 1. So we use the first video handler.
+                            handler_controller_map[0]
+                                .handler
+                                .record_screen(start, w, h, id);
+                        } else {
+                            if let Some(handler_controler) = handler_controller_map.get_mut(display)
+                            {
+                                handler_controler.handler.record_screen(start, w, h, id);
+                            }
+                        }
                     }
                     _ => {}
                 }
@@ -1868,7 +2004,13 @@ pub fn start_video_audio_threads<F>(
         log::info!("Video decoder loop exits");
     });
     let audio_sender = start_audio_thread();
-    return (video_sender, audio_sender, video_queue_cloned, decode_fps);
+    return (
+        video_sender,
+        audio_sender,
+        video_queue_map_cloned,
+        decode_fps_map,
+        chroma_cloned,
+    );
 }
 
 /// Start an audio thread
@@ -2057,13 +2199,25 @@ pub fn send_pointer_device_event(
 /// # Arguments
 ///
 /// * `interface` - The interface for sending data.
-fn activate_os(interface: &impl Interface) {
+/// * `send_left_click` - Whether to send a click event.
+fn activate_os(interface: &impl Interface, send_left_click: bool) {
+    let left_down = MOUSE_BUTTON_LEFT << 3 | MOUSE_TYPE_DOWN;
+    let left_up = MOUSE_BUTTON_LEFT << 3 | MOUSE_TYPE_UP;
+    let right_down = MOUSE_BUTTON_RIGHT << 3 | MOUSE_TYPE_DOWN;
+    let right_up = MOUSE_BUTTON_RIGHT << 3 | MOUSE_TYPE_UP;
+    send_mouse(left_up, 0, 0, false, false, false, false, interface);
+    std::thread::sleep(Duration::from_millis(50));
     send_mouse(0, 0, 0, false, false, false, false, interface);
     std::thread::sleep(Duration::from_millis(50));
     send_mouse(0, 3, 3, false, false, false, false, interface);
+    let (click_down, click_up) = if send_left_click {
+        (left_down, left_up)
+    } else {
+        (right_down, right_up)
+    };
     std::thread::sleep(Duration::from_millis(50));
-    send_mouse(1 | 1 << 3, 0, 0, false, false, false, false, interface);
-    send_mouse(2 | 1 << 3, 0, 0, false, false, false, false, interface);
+    send_mouse(click_down, 0, 0, false, false, false, false, interface);
+    send_mouse(click_up, 0, 0, false, false, false, false, interface);
     /*
     let mut key_event = KeyEvent::new();
     // do not use Esc, which has problem with Linux
@@ -2096,9 +2250,14 @@ pub fn input_os_password(p: String, activate: bool, interface: impl Interface) {
 /// * `activate` - Whether to activate OS.
 /// * `interface` - The interface for sending data.
 fn _input_os_password(p: String, activate: bool, interface: impl Interface) {
+    let input_password = !p.is_empty();
     if activate {
-        activate_os(&interface);
+        // Click event is used to bring up the password input box.
+        activate_os(&interface, input_password);
         std::thread::sleep(Duration::from_millis(1200));
+    }
+    if !input_password {
+        return;
     }
     let mut key_event = KeyEvent::new();
     key_event.press = true;
@@ -2386,21 +2545,21 @@ pub trait Interface: Send + Clone + 'static + Sized {
     /// Send message data to remote peer.
     fn send(&self, data: Data);
     fn msgbox(&self, msgtype: &str, title: &str, text: &str, link: &str);
-    fn handle_login_error(&mut self, err: &str) -> bool;
-    fn handle_peer_info(&mut self, pi: PeerInfo, is_cached_pi: bool);
+    fn handle_login_error(&self, err: &str) -> bool;
+    fn handle_peer_info(&self, pi: PeerInfo);
     fn on_error(&self, err: &str) {
         self.msgbox("error", "Error", err, "");
     }
-    async fn handle_hash(&mut self, pass: &str, hash: Hash, peer: &mut Stream);
+    async fn handle_hash(&self, pass: &str, hash: Hash, peer: &mut Stream);
     async fn handle_login_from_ui(
-        &mut self,
+        &self,
         os_username: String,
         os_password: String,
         password: String,
         remember: bool,
         peer: &mut Stream,
     );
-    async fn handle_test_delay(&mut self, t: TestDelay, peer: &mut Stream);
+    async fn handle_test_delay(&self, t: TestDelay, peer: &mut Stream);
 
     fn get_login_config_handler(&self) -> Arc<RwLock<LoginConfigHandler>>;
 
@@ -2430,7 +2589,7 @@ pub trait Interface: Send + Clone + 'static + Sized {
         let errno = errno::errno().0;
         if relay_condition
             && (cfg!(windows) && (errno == 10054 || err.contains("10054"))
-            || !cfg!(windows) && (errno == 104 || err.contains("104")))
+                || !cfg!(windows) && (errno == 104 || err.contains("104")))
         {
             lc.write().unwrap().force_relay = true;
             lc.write()
@@ -2469,7 +2628,7 @@ pub enum Data {
     SetConfirmOverrideFile((i32, i32, bool, bool, bool)),
     AddJob((i32, String, String, i32, bool, bool)),
     ResumeJob((i32, bool)),
-    RecordScreen(bool, i32, i32, String),
+    RecordScreen(bool, usize, i32, i32, String),
     ElevateDirect,
     ElevateWithLogon(String, String),
     NewVoiceCall,
@@ -2619,14 +2778,14 @@ pub fn check_if_retry(msgtype: &str, title: &str, text: &str, retry_for_relay: b
     msgtype == "error"
         && title == "Connection Error"
         && ((text.contains("10054") || text.contains("104")) && retry_for_relay
-        || (!text.to_lowercase().contains("offline")
-        && !text.to_lowercase().contains("exist")
-        && !text.to_lowercase().contains("handshake")
-        && !text.to_lowercase().contains("failed")
-        && !text.to_lowercase().contains("resolve")
-        && !text.to_lowercase().contains("mismatch")
-        && !text.to_lowercase().contains("manually")
-        && !text.to_lowercase().contains("not allowed")))
+            || (!text.to_lowercase().contains("offline")
+                && !text.to_lowercase().contains("exist")
+                && !text.to_lowercase().contains("handshake")
+                && !text.to_lowercase().contains("failed")
+                && !text.to_lowercase().contains("resolve")
+                && !text.to_lowercase().contains("mismatch")
+                && !text.to_lowercase().contains("manually")
+                && !text.to_lowercase().contains("not allowed")))
 }
 
 #[inline]

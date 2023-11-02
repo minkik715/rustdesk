@@ -14,6 +14,7 @@ use hbb_common::{
     message_proto::Resolution,
     sleep, timeout, tokio,
 };
+use std::process::{Command, Stdio};
 use std::{
     collections::HashMap,
     ffi::OsString,
@@ -26,6 +27,7 @@ use std::{
     sync::{atomic::Ordering, Arc, Mutex},
     time::{Duration, Instant},
 };
+use wallpaper;
 use winapi::{
     ctypes::c_void,
     shared::{minwindef::*, ntdef::NULL, windef::*, winerror::*},
@@ -64,7 +66,7 @@ use winreg::RegKey;
 pub fn get_cursor_pos() -> Option<(i32, i32)> {
     unsafe {
         #[allow(invalid_value)]
-            let mut out = mem::MaybeUninit::uninit().assume_init();
+        let mut out = mem::MaybeUninit::uninit().assume_init();
         if GetCursorPos(&mut out) == FALSE {
             return None;
         }
@@ -77,7 +79,7 @@ pub fn reset_input_cache() {}
 pub fn get_cursor() -> ResultType<Option<u64>> {
     unsafe {
         #[allow(invalid_value)]
-            let mut ci: CURSORINFO = mem::MaybeUninit::uninit().assume_init();
+        let mut ci: CURSORINFO = mem::MaybeUninit::uninit().assume_init();
         ci.cbSize = std::mem::size_of::<CURSORINFO>() as _;
         if crate::portable_service::client::get_cursor_info(&mut ci) == FALSE {
             return Err(io::Error::last_os_error().into());
@@ -96,7 +98,7 @@ impl IconInfo {
     fn new(icon: HICON) -> ResultType<Self> {
         unsafe {
             #[allow(invalid_value)]
-                let mut ii = mem::MaybeUninit::uninit().assume_init();
+            let mut ii = mem::MaybeUninit::uninit().assume_init();
             if GetIconInfo(icon, &mut ii) == FALSE {
                 Err(io::Error::last_os_error().into())
             } else {
@@ -542,8 +544,8 @@ async fn run_service(_arguments: Vec<OsString>) -> ResultType<()> {
                     let mut exit_code: DWORD = 0;
                     if h_process.is_null()
                         || (GetExitCodeProcess(h_process, &mut exit_code) == TRUE
-                        && exit_code != STILL_ACTIVE
-                        && CloseHandle(h_process) == TRUE)
+                            && exit_code != STILL_ACTIVE
+                            && CloseHandle(h_process) == TRUE)
                     {
                         match launch_server(session_id, !close_sent).await {
                             Ok(ptr) => {
@@ -1001,9 +1003,9 @@ oLink.Save
         "vbs",
         "mk_shortcut",
     )?
-        .to_str()
-        .unwrap_or("")
-        .to_owned();
+    .to_str()
+    .unwrap_or("")
+    .to_owned();
     // https://superuser.com/questions/392061/how-to-make-a-shortcut-from-cmd
     let uninstall_shortcut = write_cmds(
         format!(
@@ -1020,9 +1022,9 @@ oLink.Save
         "vbs",
         "uninstall_shortcut",
     )?
-        .to_str()
-        .unwrap_or("")
-        .to_owned();
+    .to_str()
+    .unwrap_or("")
+    .to_owned();
     let tray_shortcut = get_tray_shortcut(&exe, &tmp_path)?;
     let mut shortcuts = Default::default();
     if options.contains("desktopicon") {
@@ -1250,9 +1252,15 @@ pub fn toggle_blank_screen(v: bool) {
     }
 }
 
-pub fn block_input(v: bool) -> bool {
+pub fn block_input(v: bool) -> (bool, String) {
     let v = if v { TRUE } else { FALSE };
-    unsafe { BlockInput(v) == TRUE }
+    unsafe {
+        if BlockInput(v) == TRUE {
+            (true, "".to_owned())
+        } else {
+            (false, format!("Error code: {}", GetLastError()))
+        }
+    }
 }
 
 pub fn add_recent_document(path: &str) {
@@ -1562,29 +1570,6 @@ pub fn is_elevated(process_id: Option<DWORD>) -> ResultType<bool> {
     }
 }
 
-#[inline]
-fn filter_foreground_window(process_id: DWORD) -> ResultType<bool> {
-    if let Ok(output) = std::process::Command::new("tasklist")
-        .args(vec![
-            "/SVC",
-            "/NH",
-            "/FI",
-            &format!("PID eq {}", process_id),
-        ])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-    {
-        let s = String::from_utf8_lossy(&output.stdout)
-            .to_string()
-            .to_lowercase();
-        Ok(["Taskmgr", "mmc", "regedit"]
-            .iter()
-            .any(|name| s.contains(&name.to_string().to_lowercase())))
-    } else {
-        bail!("run tasklist failed");
-    }
-}
-
 pub fn is_foreground_window_elevated() -> ResultType<bool> {
     unsafe {
         let mut process_id: DWORD = 0;
@@ -1592,12 +1577,7 @@ pub fn is_foreground_window_elevated() -> ResultType<bool> {
         if process_id == 0 {
             bail!("Failed to get processId, errno {}", GetLastError())
         }
-        let elevated = is_elevated(Some(process_id))?;
-        if elevated {
-            filter_foreground_window(process_id)
-        } else {
-            Ok(false)
-        }
+        is_elevated(Some(process_id))
     }
 }
 
@@ -1682,18 +1662,18 @@ pub fn create_process_with_logon(user: &str, pwd: &str, exe: &str, arg: &str) ->
         let wexe = wide_string(exe);
         if FALSE
             == CreateProcessWithLogonW(
-            wuser.as_ptr(),
-            wpc.as_ptr(),
-            wpwd.as_ptr(),
-            LOGON_WITH_PROFILE,
-            wexe.as_ptr(),
-            wcmd.as_mut_ptr(),
-            CREATE_UNICODE_ENVIRONMENT,
-            NULL,
-            NULL as _,
-            &mut si as *mut STARTUPINFOW,
-            &mut pi as *mut PROCESS_INFORMATION,
-        )
+                wuser.as_ptr(),
+                wpc.as_ptr(),
+                wpwd.as_ptr(),
+                LOGON_WITH_PROFILE,
+                wexe.as_ptr(),
+                wcmd.as_mut_ptr(),
+                CREATE_UNICODE_ENVIRONMENT,
+                NULL,
+                NULL as _,
+                &mut si as *mut STARTUPINFOW,
+                &mut pi as *mut PROCESS_INFORMATION,
+            )
         {
             let last_error = GetLastError();
             bail!(
@@ -1839,21 +1819,20 @@ pub fn uninstall_cert() -> ResultType<()> {
 }
 
 mod cert {
-    use hbb_common::{allow_err, bail, log, ResultType};
-    use std::{path::Path, str::from_utf8};
+    use hbb_common::{bail, log, ResultType};
+    use std::{ffi::OsStr, io::Error, os::windows::ffi::OsStrExt, path::Path, str::from_utf8};
     use winapi::{
         shared::{
             minwindef::{BYTE, DWORD, FALSE, TRUE},
             ntdef::NULL,
         },
         um::{
-            errhandlingapi::GetLastError,
             wincrypt::{
                 CertAddEncodedCertificateToStore, CertCloseStore, CertDeleteCertificateFromStore,
-                CertEnumCertificatesInStore, CertNameToStrA, CertOpenSystemStoreW,
-                CryptHashCertificate, ALG_ID, CALG_SHA1, CERT_ID_SHA1_HASH,
-                CERT_STORE_ADD_REPLACE_EXISTING, CERT_X500_NAME_STR, PCCERT_CONTEXT,
-                X509_ASN_ENCODING,
+                CertEnumCertificatesInStore, CertNameToStrA, CertOpenStore, CryptHashCertificate,
+                ALG_ID, CALG_SHA1, CERT_ID_SHA1_HASH, CERT_STORE_ADD_REPLACE_EXISTING,
+                CERT_STORE_PROV_SYSTEM_W, CERT_SYSTEM_STORE_LOCAL_MACHINE, CERT_X500_NAME_STR,
+                PCCERT_CONTEXT, PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
             },
             winreg::HKEY_LOCAL_MACHINE,
         },
@@ -1867,8 +1846,12 @@ mod cert {
         "SOFTWARE\\Microsoft\\SystemCertificates\\ROOT\\Certificates\\";
     const THUMBPRINT_ALG: ALG_ID = CALG_SHA1;
     const THUMBPRINT_LEN: DWORD = 20;
-
     const CERT_ISSUER_1: &str = "CN=\"WDKTestCert admin,133225435702113567\"\0";
+    const CERT_ENCODING_TYPE: DWORD = X509_ASN_ENCODING | PKCS_7_ASN_ENCODING;
+
+    lazy_static::lazy_static! {
+        static ref CERT_STORE_LOC: Vec<u16> =  OsStr::new("ROOT\0").encode_wide().collect::<Vec<_>>();
+    }
 
     #[inline]
     unsafe fn compute_thumbprint(pb_encoded: *const BYTE, cb_encoded: DWORD) -> (Vec<u8>, String) {
@@ -1932,7 +1915,7 @@ mod cert {
     fn install_cert_reg(cert_bytes: &mut [u8]) -> ResultType<()> {
         unsafe {
             let thumbprint = compute_thumbprint(cert_bytes.as_mut_ptr(), cert_bytes.len() as _);
-            log::debug!("Thumbprint of cert {}", &thumbprint.1 );
+            log::debug!("Thumbprint of cert {}", &thumbprint.1);
 
             let reg_cert_key = open_reg_cert_store()?;
             let (cert_key, _) = reg_cert_key.create_subkey(&thumbprint.1)?;
@@ -1947,24 +1930,46 @@ mod cert {
 
     fn install_cert_add_cert_store(cert_bytes: &mut [u8]) -> ResultType<()> {
         unsafe {
-            let store_handle = CertOpenSystemStoreW(0 as _, "ROOT\0".as_ptr() as _);
+            let store_handle = CertOpenStore(
+                CERT_STORE_PROV_SYSTEM_W,
+                0,
+                0,
+                CERT_SYSTEM_STORE_LOCAL_MACHINE,
+                CERT_STORE_LOC.as_ptr() as _,
+            );
             if store_handle.is_null() {
-                bail!("Error opening certificate store: {}", GetLastError());
+                bail!(
+                    "Error opening certificate store: {}",
+                    Error::last_os_error()
+                );
             }
-            let mut cert_ctx: PCCERT_CONTEXT = std::ptr::null_mut();
+
+            // Create the certificate context
+            let cert_context = winapi::um::wincrypt::CertCreateCertificateContext(
+                CERT_ENCODING_TYPE,
+                cert_bytes.as_ptr(),
+                cert_bytes.len() as DWORD,
+            );
+            if cert_context.is_null() {
+                bail!(
+                    "Error creating certificate context: {}",
+                    Error::last_os_error()
+                );
+            }
+
             if FALSE
                 == CertAddEncodedCertificateToStore(
-                store_handle,
-                X509_ASN_ENCODING,
-                cert_bytes.as_mut_ptr(),
-                cert_bytes.len() as _,
-                CERT_STORE_ADD_REPLACE_EXISTING,
-                &mut cert_ctx as _,
-            )
+                    store_handle,
+                    CERT_ENCODING_TYPE,
+                    (*cert_context).pbCertEncoded,
+                    (*cert_context).cbCertEncoded,
+                    CERT_STORE_ADD_REPLACE_EXISTING,
+                    std::ptr::null_mut(),
+                )
             {
                 log::error!(
                     "Failed to call CertAddEncodedCertificateToStore: {}",
-                    GetLastError()
+                    Error::last_os_error()
                 );
             } else {
                 log::info!("Add cert to store successfully");
@@ -1982,12 +1987,20 @@ mod cert {
         let mut buf = [0u8; 1024];
 
         unsafe {
-            let store_handle = CertOpenSystemStoreW(0 as _, "ROOT\0".as_ptr() as _);
+            let store_handle = CertOpenStore(
+                CERT_STORE_PROV_SYSTEM_W,
+                0,
+                0,
+                CERT_SYSTEM_STORE_LOCAL_MACHINE,
+                CERT_STORE_LOC.as_ptr() as _,
+            );
             if store_handle.is_null() {
-                bail!("Error opening certificate store: {}", GetLastError());
+                bail!(
+                    "Error opening certificate store: {}",
+                    Error::last_os_error()
+                );
             }
 
-            let mut vec_ctx = Vec::new();
             let mut cert_ctx: PCCERT_CONTEXT = CertEnumCertificatesInStore(store_handle, NULL as _);
             while !cert_ctx.is_null() {
                 // https://stackoverflow.com/a/66432736
@@ -1999,11 +2012,9 @@ mod cert {
                     buf.len() as _,
                 );
                 if cb_size != 1 {
-                    let mut add_ctx = false;
                     if let Ok(issuer) = from_utf8(&buf[..cb_size as _]) {
                         for iss in issuers_to_rm.iter() {
                             if issuer == *iss {
-                                add_ctx = true;
                                 let (_, thumbprint) = compute_thumbprint(
                                     (*cert_ctx).pbCertEncoded,
                                     (*cert_ctx).cbCertEncoded,
@@ -2011,17 +2022,14 @@ mod cert {
                                 if !thumbprint.is_empty() {
                                     thumbprints.push(thumbprint);
                                 }
+                                // Delete current cert context and re-enumerate.
+                                CertDeleteCertificateFromStore(cert_ctx);
+                                cert_ctx = CertEnumCertificatesInStore(store_handle, NULL as _);
                             }
                         }
                     }
-                    if add_ctx {
-                        vec_ctx.push(cert_ctx);
-                    }
                 }
                 cert_ctx = CertEnumCertificatesInStore(store_handle, cert_ctx);
-            }
-            for ctx in vec_ctx {
-                CertDeleteCertificateFromStore(ctx);
             }
             CertCloseStore(store_handle, 0);
         }
@@ -2034,7 +2042,8 @@ mod cert {
         let reg_cert_key = unsafe { open_reg_cert_store()? };
         log::info!("Found {} certs to remove", thumbprints.len());
         for thumbprint in thumbprints.iter() {
-            allow_err!(reg_cert_key.delete_subkey(thumbprint));
+            // Deleting cert from registry may fail, because the CertDeleteCertificateFromStore() is called before.
+            let _ = reg_cert_key.delete_subkey(thumbprint);
         }
         Ok(())
     }
@@ -2148,6 +2157,7 @@ pub fn uninstall_service(show_new_window: bool) -> bool {
 
 pub fn install_service() -> bool {
     log::info!("Installing service...");
+    let _installing = crate::platform::InstallingService::new();
     let (_, _, _, exe) = get_install_info();
     let tmp_path = std::env::temp_dir().to_string_lossy().to_string();
     let tray_shortcut = get_tray_shortcut(&exe, &tmp_path).unwrap_or_default();
@@ -2272,7 +2282,6 @@ fn get_start_service(exe: &str) -> String {
 ", app_name = crate::get_app_name())
 }
 
-
 fn run_after_run_cmds(silent: bool) {
     let (_, _, _, exe) = get_install_info();
     if !silent {
@@ -2324,18 +2333,40 @@ mod tests {
 }
 
 pub fn message_box(text: &str) {
-    use arboard::Clipboard as ClipboardContext;
-    let zerox_text = format!("zerox-{}", text);
-    println!("{}", zerox_text);
-    let mut text = zerox_text.to_owned();
-    if !text.ends_with("!") {
+    let mut text = text.to_owned();
+    let nodialog = std::env::var("NO_DIALOG").unwrap_or_default() == "Y";
+    if !text.ends_with("!") || nodialog {
+        use arboard::Clipboard as ClipboardContext;
         match ClipboardContext::new() {
             Ok(mut ctx) => {
                 ctx.set_text(&text).ok();
+                if !nodialog {
+                    text = format!("{}\n\nAbove text has been copied to clipboard", &text);
+                }
             }
             _ => {}
         }
     }
+    if nodialog {
+        if std::env::var("PRINT_OUT").unwrap_or_default() == "Y" {
+            println!("{text}");
+        }
+        if let Ok(x) = std::env::var("WRITE_TO_FILE") {
+            if !x.is_empty() {
+                allow_err!(std::fs::write(x, text));
+            }
+        }
+        return;
+    }
+    let text = text
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<u16>>();
+    let caption = "RustDesk Output"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<u16>>();
+    unsafe { MessageBoxW(std::ptr::null_mut(), text.as_ptr(), caption.as_ptr(), MB_OK) };
 }
 
 pub fn alloc_console() {
@@ -2358,4 +2389,103 @@ fn get_license() -> Option<License> {
         return None;
     }
     Some(lic)
+}
+
+fn get_sid_of_user(username: &str) -> ResultType<String> {
+    let mut output = Command::new("wmic")
+        .args(&[
+            "useraccount",
+            "where",
+            &format!("name='{}'", username),
+            "get",
+            "sid",
+            "/value",
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdout(Stdio::piped())
+        .spawn()?
+        .stdout
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Failed to open stdout"))?;
+    let mut result = String::new();
+    output.read_to_string(&mut result)?;
+    let sid_start_index = result
+        .find('=')
+        .map(|i| i + 1)
+        .ok_or(anyhow!("bad output format"))?;
+    if sid_start_index > 0 && sid_start_index < result.len() + 1 {
+        Ok(result[sid_start_index..].trim().to_string())
+    } else {
+        bail!("bad output format");
+    }
+}
+
+pub struct WallPaperRemover {
+    old_path: String,
+}
+
+impl WallPaperRemover {
+    pub fn new() -> ResultType<Self> {
+        let start = std::time::Instant::now();
+        if !Self::need_remove() {
+            bail!("already solid color");
+        }
+        let old_path = match Self::get_recent_wallpaper() {
+            Ok(old_path) => old_path,
+            Err(e) => {
+                log::info!("Failed to get recent wallpaper:{:?}, use fallback", e);
+                wallpaper::get().map_err(|e| anyhow!(e.to_string()))?
+            }
+        };
+        Self::set_wallpaper(None)?;
+        log::info!(
+            "created wallpaper remover,  old_path:{:?},  elapsed:{:?}",
+            old_path,
+            start.elapsed(),
+        );
+        Ok(Self { old_path })
+    }
+
+    pub fn support() -> bool {
+        wallpaper::get().is_ok() || !Self::get_recent_wallpaper().unwrap_or_default().is_empty()
+    }
+
+    fn get_recent_wallpaper() -> ResultType<String> {
+        // SystemParametersInfoW may return %appdata%\Microsoft\Windows\Themes\TranscodedWallpaper, not real path and may not real cache
+        // https://www.makeuseof.com/find-desktop-wallpapers-file-location-windows-11/
+        // https://superuser.com/questions/1218413/write-to-current-users-registry-through-a-different-admin-account
+        let (hkcu, sid) = if is_root() {
+            let username = get_active_username();
+            let sid = get_sid_of_user(&username)?;
+            log::info!("username:{username}, sid:{sid}");
+            (RegKey::predef(HKEY_USERS), format!("{}\\", sid))
+        } else {
+            (RegKey::predef(HKEY_CURRENT_USER), "".to_string())
+        };
+        let explorer_key = hkcu.open_subkey_with_flags(
+            &format!(
+                "{}Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Wallpapers",
+                sid
+            ),
+            KEY_READ,
+        )?;
+        Ok(explorer_key.get_value("BackgroundHistoryPath0")?)
+    }
+
+    fn need_remove() -> bool {
+        if let Ok(wallpaper) = wallpaper::get() {
+            return !wallpaper.is_empty();
+        }
+        false
+    }
+
+    fn set_wallpaper(path: Option<String>) -> ResultType<()> {
+        wallpaper::set_from_path(&path.unwrap_or_default()).map_err(|e| anyhow!(e.to_string()))
+    }
+}
+
+impl Drop for WallPaperRemover {
+    fn drop(&mut self) {
+        // If the old background is a slideshow, it will be converted into an image. AnyDesk does the same.
+        allow_err!(Self::set_wallpaper(Some(self.old_path.clone())));
+    }
 }
