@@ -16,8 +16,6 @@ enum PeerTabIndex {
   group,
 }
 
-const String defaultGroupTabname = 'Group';
-
 class PeerTabModel with ChangeNotifier {
   WeakReference<FFI> parent;
   int get currentTab => _currentTab;
@@ -27,7 +25,7 @@ class PeerTabModel with ChangeNotifier {
     'Favorites',
     'Discovered',
     'Address Book',
-    //defaultGroupTabname,
+    'Group',
   ];
   final List<IconData> icons = [
     Icons.access_time_filled,
@@ -36,7 +34,10 @@ class PeerTabModel with ChangeNotifier {
     IconFont.addressBook,
     Icons.group,
   ];
+  final List<bool> _isVisible = List.filled(5, true, growable: false);
+  List<bool> get isVisible => _isVisible;
   List<int> get indexs => List.generate(tabNames.length, (index) => index);
+  List<int> get visibleIndexs => indexs.where((e) => _isVisible[e]).toList();
   List<Peer> _selectedPeers = List.empty(growable: true);
   List<Peer> get selectedPeers => _selectedPeers;
   bool _multiSelectionMode = false;
@@ -49,12 +50,29 @@ class PeerTabModel with ChangeNotifier {
   String get lastId => _lastId;
 
   PeerTabModel(this.parent) {
+    // visible
+    try {
+      final option = bind.getLocalFlutterOption(k: 'peer-tab-visible');
+      if (option.isNotEmpty) {
+        List<dynamic> decodeList = jsonDecode(option);
+        if (decodeList.length == _isVisible.length) {
+          for (int i = 0; i < _isVisible.length; i++) {
+            if (decodeList[i] is bool) {
+              _isVisible[i] = decodeList[i];
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("failed to get peer tab visible list:$e");
+    }
     // init currentTab
     _currentTab =
         int.tryParse(bind.getLocalFlutterOption(k: 'peer-tab-index')) ?? 0;
     if (_currentTab < 0 || _currentTab >= tabNames.length) {
       _currentTab = 0;
     }
+    _trySetCurrentTabToFirstVisible();
   }
 
   setCurrentTab(int index) {
@@ -64,17 +82,9 @@ class PeerTabModel with ChangeNotifier {
     }
   }
 
-  String tabTooltip(int index, String groupName) {
+  String tabTooltip(int index) {
     if (index >= 0 && index < tabNames.length) {
-      if (index == PeerTabIndex.group.index) {
-        if (gFFI.userModel.isAdmin.value || groupName.isEmpty) {
-          return translate(defaultGroupTabname);
-        } else {
-          return '${translate('Group')}: $groupName';
-        }
-      } else {
-        return translate(tabNames[index]);
-      }
+      return translate(tabNames[index]);
     }
     assert(false);
     return index.toString();
@@ -159,13 +169,30 @@ class PeerTabModel with ChangeNotifier {
     }
   }
 
-  set isShiftDown(bool v) {
-    if (_isShiftDown != v) {
-      _isShiftDown = v;
-      if (_multiSelectionMode) {
+  setTabVisible(int index, bool visible) {
+    if (index >= 0 && index < _isVisible.length) {
+      if (_isVisible[index] != visible) {
+        _isVisible[index] = visible;
+        if (index == _currentTab && !visible) {
+          _trySetCurrentTabToFirstVisible();
+        } else if (visible && visibleIndexs.length == 1) {
+          _currentTab = index;
+        }
+        try {
+          bind.setLocalFlutterOption(
+              k: 'peer-tab-visible', v: jsonEncode(_isVisible));
+        } catch (_) {}
         notifyListeners();
       }
     }
   }
 
+  _trySetCurrentTabToFirstVisible() {
+    if (!_isVisible[_currentTab]) {
+      int firstVisible = _isVisible.indexWhere((e) => e);
+      if (firstVisible >= 0) {
+        _currentTab = firstVisible;
+      }
+    }
+  }
 }

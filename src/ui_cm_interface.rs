@@ -1,6 +1,6 @@
 #[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
 use std::iter::FromIterator;
-#[cfg(windows)]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 use std::sync::Arc;
 use std::{
     collections::HashMap,
@@ -15,11 +15,11 @@ use std::{
 use crate::ipc::Connection;
 #[cfg(not(any(target_os = "ios")))]
 use crate::ipc::{self, Data};
-#[cfg(windows)]
-use clipboard::{cliprdr::CliprdrClientContext, empty_clipboard, ContextSend};
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+use clipboard::ContextSend;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use hbb_common::tokio::sync::mpsc::unbounded_channel;
-#[cfg(windows)]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 use hbb_common::tokio::sync::Mutex as TokioMutex;
 use hbb_common::{
     allow_err,
@@ -34,6 +34,7 @@ use hbb_common::{
         sync::mpsc::{self, UnboundedSender},
         task::spawn_blocking,
     },
+    ResultType,
 };
 use serde_derive::Serialize;
 
@@ -69,9 +70,9 @@ struct IpcTaskRunner<T: InvokeUiCM> {
     close: bool,
     running: bool,
     conn_id: i32,
-    #[cfg(windows)]
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     file_transfer_enabled: bool,
-    #[cfg(windows)]
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     file_transfer_enabled_peer: bool,
 }
 
@@ -99,6 +100,8 @@ pub trait InvokeUiCM: Send + Clone + 'static + Sized {
     fn show_elevation(&self, show: bool);
 
     fn update_voice_call_state(&self, client: &Client);
+
+    fn file_transfer_log(&self, log: String);
 }
 
 impl<T: InvokeUiCM> Deref for ConnectionManager<T> {
@@ -162,6 +165,7 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
     }
 
     #[inline]
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     fn is_authorized(&self, id: i32) -> bool {
         CLIENTS
             .read()
@@ -182,11 +186,11 @@ impl<T: InvokeUiCM> ConnectionManager<T> {
                 .map(|c| c.disconnected = true);
         }
 
-        #[cfg(windows)]
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         {
-            ContextSend::proc(|context: &mut CliprdrClientContext| -> u32 {
-                empty_clipboard(context, id);
-                0
+            let _ = ContextSend::proc(|context| -> ResultType<()> {
+                context.empty_clipboard(id)?;
+                Ok(())
             });
         }
 
@@ -325,30 +329,35 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
 
         // for tmp use, without real conn id
         let mut write_jobs: Vec<fs::TransferJob> = Vec::new();
+
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         let is_authorized = self.cm.is_authorized(self.conn_id);
 
-        #[cfg(windows)]
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         let rx_clip1;
         let mut rx_clip;
         let _tx_clip;
-        #[cfg(windows)]
-        if is_authorized {
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        if self.conn_id > 0 && is_authorized {
+            log::debug!("Clipboard is enabled from client peer: type 1");
             rx_clip1 = clipboard::get_rx_cliprdr_server(self.conn_id);
             rx_clip = rx_clip1.lock().await;
         } else {
+            log::debug!("Clipboard is enabled from client peer, actually useless: type 2");
             let rx_clip2;
             (_tx_clip, rx_clip2) = unbounded_channel::<clipboard::ClipboardFile>();
             rx_clip1 = Arc::new(TokioMutex::new(rx_clip2));
             rx_clip = rx_clip1.lock().await;
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
         {
             (_tx_clip, rx_clip) = unbounded_channel::<i32>();
         }
 
-        #[cfg(windows)]
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         {
             if ContextSend::is_enabled() {
+                log::debug!("Clipboard is enabled");
                 allow_err!(
                     self.stream
                         .send(&Data::ClipboardFile(clipboard::ClipboardFile::MonitorReady))
@@ -356,6 +365,7 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                 );
             }
         }
+        let (tx_log, mut rx_log) = mpsc::unbounded_channel::<String>();
 
         self.running = false;
         loop {
@@ -372,7 +382,7 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                                     log::debug!("conn_id: {}", id);
                                     self.cm.add_connection(id, is_file_transfer, port_forward, peer_id, name, authorized, keyboard, clipboard, audio, file, restart, recording, from_switch,self.tx.clone());
                                     self.conn_id = id;
-                                    #[cfg(windows)]
+                                    #[cfg(any(target_os = "linux", target_os = "windows", target_os = "macos"))]
                                     {
                                         self.file_transfer_enabled = _file_transfer_enabled;
                                     }
@@ -402,15 +412,20 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                                     if let ipc::FS::WriteBlock { id, file_num, data: _, compressed } = fs {
                                         if let Ok(bytes) = self.stream.next_raw().await {
                                             fs = ipc::FS::WriteBlock{id, file_num, data:bytes.into(), compressed};
-                                            handle_fs(fs, &mut write_jobs, &self.tx).await;
+                                            handle_fs(fs, &mut write_jobs, &self.tx, Some(&tx_log)).await;
                                         }
                                     } else {
-                                        handle_fs(fs, &mut write_jobs, &self.tx).await;
+                                        handle_fs(fs, &mut write_jobs, &self.tx, Some(&tx_log)).await;
                                     }
+                                    let log = fs::serialize_transfer_jobs(&write_jobs);
+                                    self.cm.ui_handler.file_transfer_log(log);
+                                }
+                                Data::FileTransferLog(log) => {
+                                    self.cm.ui_handler.file_transfer_log(log);
                                 }
                                 #[cfg(not(any(target_os = "android", target_os = "ios")))]
                                 Data::ClipboardFile(_clip) => {
-                                    #[cfg(windows)]
+                                    #[cfg(any(target_os = "windows", target_os="linux", target_os = "macos"))]
                                     {
                                         let is_stopping_allowed = _clip.is_stopping_allowed_from_peer();
                                         let is_clipboard_enabled = ContextSend::is_enabled();
@@ -427,14 +442,15 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                                                 continue;
                                             }
                                             let conn_id = self.conn_id;
-                                            ContextSend::proc(|context: &mut CliprdrClientContext| -> u32 {
-                                                clipboard::server_clip_file(context, conn_id, _clip)
+                                            let _ = ContextSend::proc(|context| -> ResultType<()> {
+                                                context.server_clip_file(conn_id, _clip)
+                                                    .map_err(|e| e.into())
                                             });
                                         }
                                     }
                                 }
                                 Data::ClipboardFileEnabled(_enabled) => {
-                                    #[cfg(windows)]
+                                    #[cfg(any(target_os= "windows",target_os ="linux", target_os = "macos"))]
                                     {
                                         self.file_transfer_enabled_peer = _enabled;
                                     }
@@ -467,12 +483,13 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                     }
                 }
                 Some(data) = self.rx.recv() => {
-                    if self.stream.send(&data).await.is_err() {
+                    if let Err(e) = self.stream.send(&data).await {
+                        log::error!("error encountered in IPC task, quitting: {}", e);
                         break;
                     }
                     match &data {
                         Data::SwitchPermission{name: _name, enabled: _enabled} => {
-                            #[cfg(windows)]
+                            #[cfg(any(target_os="linux", target_os="windows", target_os = "macos"))]
                             if _name == "file" {
                                 self.file_transfer_enabled = *_enabled;
                             }
@@ -487,7 +504,7 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                 },
                 clip_file = rx_clip.recv() => match clip_file {
                     Some(_clip) => {
-                        #[cfg(windows)]
+                        #[cfg(any(target_os = "windows", target_os ="linux", target_os = "macos"))]
                         {
                             let is_stopping_allowed = _clip.is_stopping_allowed();
                             let is_clipboard_enabled = ContextSend::is_enabled();
@@ -495,7 +512,7 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                             let file_transfer_enabled_peer = self.file_transfer_enabled_peer;
                             let stop = is_stopping_allowed && !(is_clipboard_enabled && file_transfer_enabled && file_transfer_enabled_peer);
                             log::debug!(
-                                "Process clipboard message from cm, stop: {}, is_stopping_allowed: {}, is_clipboard_enabled: {}, file_transfer_enabled: {}, file_transfer_enabled_peer: {}",
+                                "Process clipboard message from clip, stop: {}, is_stopping_allowed: {}, is_clipboard_enabled: {}, file_transfer_enabled: {}, file_transfer_enabled_peer: {}",
                                 stop, is_stopping_allowed, is_clipboard_enabled, file_transfer_enabled, file_transfer_enabled_peer);
                             if stop {
                                 ContextSend::set_is_stopped();
@@ -508,6 +525,9 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
                         //
                     }
                 },
+                Some(job_log) = rx_log.recv() => {
+                    self.cm.ui_handler.file_transfer_log(job_log);
+                }
             }
         }
     }
@@ -523,9 +543,9 @@ impl<T: InvokeUiCM> IpcTaskRunner<T> {
             close: true,
             running: true,
             conn_id: 0,
-            #[cfg(windows)]
+            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
             file_transfer_enabled: false,
-            #[cfg(windows)]
+            #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
             file_transfer_enabled_peer: false,
         };
 
@@ -555,7 +575,13 @@ pub async fn start_ipc<T: InvokeUiCM>(cm: ConnectionManager<T>) {
         }
     });
 
-    #[cfg(target_os = "windows")]
+    #[cfg(any(
+        target_os = "windows",
+        all(
+            any(target_os = "linux", target_os = "macos"),
+            feature = "unix-file-copy-paste"
+        ),
+    ))]
     ContextSend::enable(Config::get_option("enable-file-transfer").is_empty());
 
     match ipc::new_listener("_cm").await {
@@ -631,7 +657,7 @@ pub async fn start_listen<T: InvokeUiCM>(
                 cm.new_message(current_id, text);
             }
             Some(Data::FS(fs)) => {
-                handle_fs(fs, &mut write_jobs, &tx).await;
+                handle_fs(fs, &mut write_jobs, &tx, None).await;
             }
             Some(Data::Close) => {
                 break;
@@ -646,7 +672,14 @@ pub async fn start_listen<T: InvokeUiCM>(
 }
 
 #[cfg(not(any(target_os = "ios")))]
-async fn handle_fs(fs: ipc::FS, write_jobs: &mut Vec<fs::TransferJob>, tx: &UnboundedSender<Data>) {
+async fn handle_fs(
+    fs: ipc::FS,
+    write_jobs: &mut Vec<fs::TransferJob>,
+    tx: &UnboundedSender<Data>,
+    tx_log: Option<&UnboundedSender<String>>,
+) {
+    use hbb_common::fs::serialize_transfer_job;
+
     match fs {
         ipc::FS::ReadDir {
             dir,
@@ -673,10 +706,12 @@ async fn handle_fs(fs: ipc::FS, write_jobs: &mut Vec<fs::TransferJob>, tx: &Unbo
             file_num,
             mut files,
             overwrite_detection,
+            total_size,
+            conn_id,
         } => {
             // cm has no show_hidden context
             // dummy remote, show_hidden, is_remote
-            write_jobs.push(fs::TransferJob::new_write(
+            let mut job = fs::TransferJob::new_write(
                 id,
                 "".to_string(),
                 path,
@@ -692,11 +727,17 @@ async fn handle_fs(fs: ipc::FS, write_jobs: &mut Vec<fs::TransferJob>, tx: &Unbo
                     })
                     .collect(),
                 overwrite_detection,
-            ));
+            );
+            job.total_size = total_size;
+            job.conn_id = conn_id;
+            write_jobs.push(job);
         }
         ipc::FS::CancelWrite { id } => {
             if let Some(job) = fs::get_job(id, write_jobs) {
                 job.remove_download_file();
+                tx_log.map(|tx: &UnboundedSender<String>| {
+                    tx.send(serialize_transfer_job(job, false, true, ""))
+                });
                 fs::remove_job(id, write_jobs);
             }
         }
@@ -704,11 +745,13 @@ async fn handle_fs(fs: ipc::FS, write_jobs: &mut Vec<fs::TransferJob>, tx: &Unbo
             if let Some(job) = fs::get_job(id, write_jobs) {
                 job.modify_time();
                 send_raw(fs::new_done(id, file_num), tx);
+                tx_log.map(|tx| tx.send(serialize_transfer_job(job, true, false, "")));
                 fs::remove_job(id, write_jobs);
             }
         }
         ipc::FS::WriteError { id, file_num, err } => {
             if let Some(job) = fs::get_job(id, write_jobs) {
+                tx_log.map(|tx| tx.send(serialize_transfer_job(job, false, false, &err)));
                 send_raw(fs::new_error(job.id(), err, file_num), tx);
                 fs::remove_job(job.id(), write_jobs);
             }

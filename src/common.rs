@@ -11,8 +11,117 @@ pub enum GrabState {
     Exit,
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(not(any(
+    target_os = "android",
+    target_os = "ios",
+    all(target_os = "linux", feature = "unix-file-copy-paste")
+)))]
 pub use arboard::Clipboard as ClipboardContext;
+
+#[cfg(all(target_os = "linux", feature = "unix-file-copy-paste"))]
+static X11_CLIPBOARD: once_cell::sync::OnceCell<x11_clipboard::Clipboard> =
+    once_cell::sync::OnceCell::new();
+
+#[cfg(all(target_os = "linux", feature = "unix-file-copy-paste"))]
+fn get_clipboard() -> Result<&'static x11_clipboard::Clipboard, String> {
+    X11_CLIPBOARD
+        .get_or_try_init(|| x11_clipboard::Clipboard::new())
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(all(target_os = "linux", feature = "unix-file-copy-paste"))]
+pub struct ClipboardContext {
+    string_setter: x11rb::protocol::xproto::Atom,
+    string_getter: x11rb::protocol::xproto::Atom,
+    text_uri_list: x11rb::protocol::xproto::Atom,
+
+    clip: x11rb::protocol::xproto::Atom,
+    prop: x11rb::protocol::xproto::Atom,
+}
+
+#[cfg(all(target_os = "linux", feature = "unix-file-copy-paste"))]
+fn parse_plain_uri_list(v: Vec<u8>) -> Result<String, String> {
+    let text = String::from_utf8(v).map_err(|_| "ConversionFailure".to_owned())?;
+    let mut list = String::new();
+    for line in text.lines() {
+        if !line.starts_with("file://") {
+            continue;
+        }
+        let decoded = percent_encoding::percent_decode_str(line)
+            .decode_utf8()
+            .map_err(|_| "ConversionFailure".to_owned())?;
+        list = list + "\n" + decoded.trim_start_matches("file://");
+    }
+    list = list.trim().to_owned();
+    Ok(list)
+}
+
+#[cfg(all(target_os = "linux", feature = "unix-file-copy-paste"))]
+impl ClipboardContext {
+    pub fn new() -> Result<Self, String> {
+        let clipboard = get_clipboard()?;
+        let string_getter = clipboard
+            .getter
+            .get_atom("UTF8_STRING")
+            .map_err(|e| e.to_string())?;
+        let string_setter = clipboard
+            .setter
+            .get_atom("UTF8_STRING")
+            .map_err(|e| e.to_string())?;
+        let text_uri_list = clipboard
+            .getter
+            .get_atom("text/uri-list")
+            .map_err(|e| e.to_string())?;
+        let prop = clipboard.getter.atoms.property;
+        let clip = clipboard.getter.atoms.clipboard;
+        Ok(Self {
+            text_uri_list,
+            string_setter,
+            string_getter,
+            clip,
+            prop,
+        })
+    }
+
+    pub fn get_text(&mut self) -> Result<String, String> {
+        let clip = self.clip;
+        let prop = self.prop;
+
+        const TIMEOUT: std::time::Duration = std::time::Duration::from_millis(120);
+
+        let text_content = get_clipboard()?
+            .load(clip, self.string_getter, prop, TIMEOUT)
+            .map_err(|e| e.to_string())?;
+
+        let file_urls = get_clipboard()?.load(clip, self.text_uri_list, prop, TIMEOUT);
+
+        if file_urls.is_err() || file_urls.as_ref().unwrap().is_empty() {
+            log::trace!("clipboard get text, no file urls");
+            return String::from_utf8(text_content).map_err(|e| e.to_string());
+        }
+
+        let file_urls = parse_plain_uri_list(file_urls.unwrap())?;
+
+        let text_content = String::from_utf8(text_content).map_err(|e| e.to_string())?;
+
+        if text_content.trim() == file_urls.trim() {
+            log::trace!("clipboard got text but polluted");
+            return Err(String::from("polluted text"));
+        }
+
+        Ok(text_content)
+    }
+
+    pub fn set_text(&mut self, content: String) -> Result<(), String> {
+        let clip = self.clip;
+
+        let value = content.clone().into_bytes();
+        get_clipboard()?
+            .store(clip, self.string_setter, value)
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use hbb_common::compress::decompress;
@@ -25,7 +134,7 @@ use hbb_common::{
     protobuf::Enum,
     protobuf::Message as _,
     rendezvous_proto::*,
-    sleep, socket_client,
+    socket_client,
     tcp::FramedStream,
     tokio, ResultType,
 };
@@ -53,6 +162,8 @@ pub const PLATFORM_WINDOWS: &str = "Windows";
 pub const PLATFORM_LINUX: &str = "Linux";
 pub const PLATFORM_MACOS: &str = "Mac OS";
 pub const PLATFORM_ANDROID: &str = "Android";
+
+const MIN_VER_MULTI_UI_SESSION: &str = "1.2.4";
 
 pub mod input {
     pub const MOUSE_TYPE_MOVE: i32 = 0;
@@ -106,7 +217,7 @@ impl Drop for SimpleCallOnReturn {
 pub fn global_init() -> bool {
     #[cfg(target_os = "linux")]
     {
-        if !*IS_X11 {
+        if !crate::platform::linux::is_x11() {
             crate::server::wayland::init();
         }
     }
@@ -118,6 +229,16 @@ pub fn global_clean() {}
 #[inline]
 pub fn set_server_running(b: bool) {
     *SERVER_RUNNING.write().unwrap() = b;
+}
+
+#[inline]
+pub fn is_support_multi_ui_session(ver: &str) -> bool {
+    is_support_multi_ui_session_num(hbb_common::get_version_number(ver))
+}
+
+#[inline]
+pub fn is_support_multi_ui_session_num(ver: i64) -> bool {
+    ver >= hbb_common::get_version_number(MIN_VER_MULTI_UI_SESSION)
 }
 
 // is server process, with "--server" args
@@ -779,12 +900,22 @@ pub fn get_sysinfo() -> serde_json::Value {
         os = format!("{os} - {}", system.os_version().unwrap_or_default());
     }
     let hostname = hostname(); // sys.hostname() return localhost on android in my test
-    serde_json::json!({
+    use serde_json::json;
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    let out;
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let mut out;
+    out = json!({
         "cpu": format!("{cpu}{num_cpus}/{num_pcpus} cores"),
         "memory": format!("{memory}GB"),
         "os": os,
         "hostname": hostname,
-    })
+    });
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        out["username"] = json!(crate::platform::get_active_username());
+    }
+    out
 }
 
 #[inline]
@@ -831,30 +962,19 @@ pub fn check_software_update() {
 
 #[tokio::main(flavor = "current_thread")]
 async fn check_software_update_() -> hbb_common::ResultType<()> {
-    sleep(3.).await;
+    let url = "https://github.com/rustdesk/rustdesk/releases/latest";
+    let latest_release_response = reqwest::get(url).await?;
+    let latest_release_version = latest_release_response
+        .url()
+        .path()
+        .rsplit('/')
+        .next()
+        .unwrap_or_default();
 
-    let rendezvous_server = format!("rs-sg.rustdesk.com:{}", config::RENDEZVOUS_PORT);
-    let (mut socket, rendezvous_server) =
-        socket_client::new_udp_for(&rendezvous_server, CONNECT_TIMEOUT).await?;
+    let response_url = latest_release_response.url().to_string();
 
-    let mut msg_out = RendezvousMessage::new();
-    msg_out.set_software_update(SoftwareUpdate {
-        url: crate::VERSION.to_owned(),
-        ..Default::default()
-    });
-    socket.send(&msg_out, rendezvous_server).await?;
-    use hbb_common::protobuf::Message;
-    for _ in 0..2 {
-        if let Some(Ok((bytes, _))) = socket.next_timeout(READ_TIMEOUT).await {
-            if let Ok(msg_in) = RendezvousMessage::parse_from_bytes(&bytes) {
-                if let Some(rendezvous_message::Union::SoftwareUpdate(su)) = msg_in.union {
-                    let version = hbb_common::get_version_from_url(&su.url);
-                    if get_version_number(&version) > get_version_number(crate::VERSION) {
-                        *SOFTWARE_UPDATE_URL.lock().unwrap() = su.url;
-                    }
-                }
-            }
-        }
+    if get_version_number(&latest_release_version) > get_version_number(crate::VERSION) {
+        *SOFTWARE_UPDATE_URL.lock().unwrap() = response_url;
     }
     Ok(())
 }
@@ -945,14 +1065,25 @@ pub async fn post_request_sync(url: String, body: String, header: &str) -> Resul
 }
 
 #[inline]
-pub fn make_privacy_mode_msg(state: back_notification::PrivacyModeState) -> Message {
+pub fn make_privacy_mode_msg_with_details(
+    state: back_notification::PrivacyModeState,
+    details: String,
+) -> Message {
     let mut misc = Misc::new();
-    let mut back_notification = BackNotification::new();
+    let mut back_notification = BackNotification {
+        details,
+        ..Default::default()
+    };
     back_notification.set_privacy_mode_state(state);
     misc.set_back_notification(back_notification);
     let mut msg_out = Message::new();
     msg_out.set_misc(misc);
     msg_out
+}
+
+#[inline]
+pub fn make_privacy_mode_msg(state: back_notification::PrivacyModeState) -> Message {
+    make_privacy_mode_msg_with_details(state, "".to_owned())
 }
 
 pub fn is_keyboard_mode_supported(keyboard_mode: &KeyboardMode, version_number: i64) -> bool {
@@ -969,17 +1100,6 @@ pub fn get_supported_keyboard_modes(version: i64) -> Vec<KeyboardMode> {
         .filter(|&mode| is_keyboard_mode_supported(mode, version))
         .map(|&mode| mode)
         .collect::<Vec<_>>()
-}
-
-#[cfg(not(target_os = "linux"))]
-lazy_static::lazy_static! {
-    pub static ref IS_X11: bool = false;
-
-}
-
-#[cfg(target_os = "linux")]
-lazy_static::lazy_static! {
-    pub static ref IS_X11: bool = hbb_common::platform::linux::is_x11_or_headless();
 }
 
 pub fn make_fd_to_json(id: i32, path: String, entries: &Vec<FileEntry>) -> String {
@@ -1045,24 +1165,6 @@ pub async fn get_key(sync: bool) -> String {
         key = config::RS_PUB_KEY.to_owned();
     }
     key
-}
-
-pub fn is_peer_version_ge(v: &str) -> bool {
-    #[cfg(not(any(feature = "flutter", feature = "cli")))]
-    if let Some(session) = crate::ui::CUR_SESSION.lock().unwrap().as_ref() {
-        return session.get_peer_version() >= hbb_common::get_version_number(v);
-    }
-
-    #[cfg(feature = "flutter")]
-    if let Some(session) = crate::flutter::SESSIONS
-        .read()
-        .unwrap()
-        .get(&*crate::flutter::CUR_SESSION_ID.read().unwrap())
-    {
-        return session.get_peer_version() >= hbb_common::get_version_number(v);
-    }
-
-    false
 }
 
 pub fn pk_to_fingerprint(pk: Vec<u8>) -> String {

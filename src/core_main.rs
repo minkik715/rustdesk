@@ -1,3 +1,5 @@
+#[cfg(windows)]
+use crate::client::translate;
 #[cfg(not(debug_assertions))]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::platform::breakdown_callback;
@@ -5,6 +7,8 @@ use hbb_common::log;
 #[cfg(not(debug_assertions))]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use hbb_common::platform::register_breakdown_handler;
+#[cfg(windows)]
+use tauri_winrt_notification::{Duration, Sound, Toast};
 
 #[macro_export]
 macro_rules! my_println{
@@ -109,14 +113,14 @@ pub fn core_main() -> Option<Vec<String>> {
         args.clear();
     }
     if args.len() > 0 && args[0] == "--version" {
-        my_println!("{}", crate::VERSION);
+        println!("{}", crate::VERSION);
         return None;
     }
     #[cfg(windows)]
     {
         _is_quick_support |= !crate::platform::is_installed()
             && args.is_empty()
-            && (arg_exe.to_lowercase().ends_with("qs.exe")
+            && (arg_exe.to_lowercase().contains("-qs-")
                 || (!click_setup && crate::platform::is_elevated(None).unwrap_or(false)));
         crate::portable_service::client::set_quick_support(_is_quick_support);
     }
@@ -225,6 +229,8 @@ pub fn core_main() -> Option<Vec<String>> {
             log::info!("start --uninstall-service");
             crate::platform::uninstall_service(false);
         } else if args[0] == "--service" {
+            #[cfg(target_os = "macos")]
+            crate::platform::macos::hide_dock();
             log::info!("start --service");
             crate::start_os_service();
             return None;
@@ -263,7 +269,7 @@ pub fn core_main() -> Option<Vec<String>> {
                     } else {
                     }
                 } else {
-                    my_println!("Installation and administrative privileges required!");
+                    println!("Installation and administrative privileges required!");
                 }
             }
             return None;
@@ -281,9 +287,9 @@ pub fn core_main() -> Option<Vec<String>> {
                     if res.is_empty() {
                         res = "Done!".to_owned();
                     }
-                    my_println!("{}", res);
+                    println!("{}", res);
                 } else {
-                    my_println!("Installation and administrative privileges required!");
+                    println!("Installation and administrative privileges required!");
                 }
             }
             return None;
@@ -307,7 +313,7 @@ pub fn core_main() -> Option<Vec<String>> {
                         }
                     }
                 } else {
-                    my_println!("Installation and administrative privileges required!");
+                    println!("Installation and administrative privileges required!");
                 }
             }
             return None;
@@ -315,12 +321,12 @@ pub fn core_main() -> Option<Vec<String>> {
             if crate::platform::is_installed() && is_root() {
                 if args.len() == 2 {
                     let options = crate::ipc::get_options();
-                    my_println!("{}", options.get(&args[1]).unwrap_or(&"".to_owned()));
+                    println!("{}", options.get(&args[1]).unwrap_or(&"".to_owned()));
                 } else if args.len() == 3 {
                     crate::ipc::set_option(&args[1], &args[2]);
                 }
             } else {
-                my_println!("Installation and administrative privileges required!");
+                println!("Installation and administrative privileges required!");
             }
             return None;
         } else if args[0] == "--assign" {
@@ -350,7 +356,7 @@ pub fn core_main() -> Option<Vec<String>> {
                     });
                     let header = "Authorization: Bearer ".to_owned() + &token;
                     if user_name.is_none() && strategy_name.is_none() {
-                        my_println!("--user_name or --strategy_name is required!");
+                        println!("--user_name or --strategy_name is required!");
                     } else {
                         if let Some(name) = user_name {
                             body["user_name"] = serde_json::json!(name);
@@ -363,18 +369,18 @@ pub fn core_main() -> Option<Vec<String>> {
                             Err(err) => println!("{}", err),
                             Ok(text) => {
                                 if text.is_empty() {
-                                    my_println!("Done!");
+                                    println!("Done!");
                                 } else {
-                                    my_println!("{}", text);
+                                    println!("{}", text);
                                 }
                             }
                         }
                     }
                 } else {
-                    my_println!("--token is required!");
+                    println!("--token is required!");
                 }
             } else {
-                my_println!("Installation and administrative privileges required!");
+                println!("Installation and administrative privileges required!");
             }
             return None;
         } else if args[0] == "--check-hwcodec-config" {
@@ -387,7 +393,7 @@ pub fn core_main() -> Option<Vec<String>> {
             crate::ui_interface::start_option_status_sync();
         } else if args[0] == "--cm-no-ui" {
             #[cfg(feature = "flutter")]
-            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "windows")))]
             crate::flutter::connection_manager::start_cm_no_ui();
             return None;
         } else {
@@ -415,12 +421,11 @@ pub fn core_main() -> Option<Vec<String>> {
     return Some(args);
 }
 
-
 #[inline]
 #[cfg(all(feature = "flutter", feature = "plugin_framework"))]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn init_plugins(args: &Vec<String>) {
-if args.is_empty() || "--server" == (&args[0] as &str) {
+    if args.is_empty() || "--server" == (&args[0] as &str) {
         #[cfg(debug_assertions)]
         let load_plugins = true;
         #[cfg(not(debug_assertions))]
