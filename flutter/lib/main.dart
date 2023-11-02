@@ -483,9 +483,9 @@ Widget keyListenerBuilder(BuildContext context, Widget? child) {
     onKey: (RawKeyEvent event) {
       if (event.logicalKey == LogicalKeyboardKey.shiftLeft) {
         if (event is RawKeyDownEvent) {
-          gFFI.peerTabModel.isShiftDown = true;
+          gFFI.peerTabModel.setShiftDown(true);
         } else if (event is RawKeyUpEvent) {
-          gFFI.peerTabModel.isShiftDown = false;
+          gFFI.peerTabModel.setShiftDown(false);
         }
       }
     },
