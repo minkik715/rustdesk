@@ -311,7 +311,7 @@ pub fn session_set_image_quality(session_id: SessionID, value: String) {
 }
 
 pub fn session_get_keyboard_mode(session_id: SessionID) -> Option<String> {
-    if let Some(session) = SESSIONS.read().unwrap().get(&session_id) {
+    if let Some(session) = sessions::get_session_by_session_id(&session_id) {
         Some(session.get_keyboard_mode())
     } else {
         None
