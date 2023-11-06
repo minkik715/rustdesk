@@ -117,7 +117,7 @@ pub fn session_add_sync(
         is_port_forward,
         is_rdp,
         &switch_uuid,
-        force_relay,
+        true,
         password,
     ) {
         SyncReturn(format!("Failed to add session with id {}, {}", &id, e))
@@ -208,7 +208,7 @@ pub fn session_record_status(session_id: SessionID, status: bool) {
 
 pub fn session_reconnect(session_id: SessionID, force_relay: bool) {
     if let Some(session) = sessions::get_session_by_session_id(&session_id) {
-        session.reconnect(force_relay);
+        session.reconnect(true);
     }
     session_on_waiting_for_image_dialog_show(session_id);
 }

@@ -881,7 +881,7 @@ pub fn session_add(
         .lc
         .write()
         .unwrap()
-        .initialize(id.to_owned(), conn_type, switch_uuid, force_relay);
+        .initialize(id.to_owned(), conn_type, switch_uuid, true);
     let session = Arc::new(session.clone());
     sessions::insert_session(session_id.to_owned(), conn_type, session.clone());
 

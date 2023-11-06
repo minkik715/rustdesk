@@ -969,7 +969,7 @@ impl<T: InvokeUiSession> Session<T> {
 
         let cloned = self.clone();
         // override only if true
-        if true == force_relay {
+        if true {
             self.lc.write().unwrap().force_relay = true;
         }
         let mut lock = self.thread.lock().unwrap();

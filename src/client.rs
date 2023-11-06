@@ -298,7 +298,7 @@ impl Client {
             log::info!("#{} punch attempt with {}, id: {}", i, my_addr, peer);
             let mut msg_out = RendezvousMessage::new();
             use hbb_common::protobuf::Enum;
-            let nat_type = if interface.is_force_relay() {
+            let nat_type = if true {
                 NatType::SYMMETRIC
             } else {
                 NatType::from_i32(my_nat_type).unwrap_or(NatType::UNKNOWN_NAT)
@@ -462,7 +462,7 @@ impl Client {
             socket_client::connect_tcp_local(peer, Some(local_addr), connect_timeout).await;
         let mut direct = !conn.is_err();
         interface.update_direct(Some(direct));
-        if interface.is_force_relay() || conn.is_err() {
+        if true || conn.is_err() {
             if !relay_server.is_empty() {
                 conn = Self::request_relay(
                     peer_id,
@@ -1135,7 +1135,7 @@ impl LoginConfigHandler {
         self.session_id = sid;
         self.supported_encoding = Default::default();
         self.restarting_remote_device = false;
-        self.force_relay = !self.get_option("force-always-relay").is_empty() || force_relay;
+        self.force_relay = !self.get_option("force-always-relay").is_empty() || true;
         self.direct = None;
         self.received = false;
         self.switch_uuid = switch_uuid;
@@ -2564,7 +2564,7 @@ pub trait Interface: Send + Clone + 'static + Sized {
     fn get_login_config_handler(&self) -> Arc<RwLock<LoginConfigHandler>>;
 
     fn is_force_relay(&self) -> bool {
-        self.get_login_config_handler().read().unwrap().force_relay
+        true
     }
     fn swap_modifier_mouse(&self, _msg: &mut hbb_common::protos::message::MouseEvent) {}
 

@@ -405,7 +405,7 @@ pub fn set_socks(proxy: String, username: String, password: String) {
         username,
         password,
     })
-    .ok();
+        .ok();
 }
 
 #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -602,7 +602,7 @@ pub fn get_new_version() -> String {
         .rsplit('/')
         .next()
         .unwrap_or(""))
-    .to_string()
+        .to_string()
 }
 
 #[inline]
@@ -899,10 +899,8 @@ pub fn recent_sessions_updated() -> bool {
 pub fn new_remote(id: String, remote_type: String, force_relay: bool) {
     let mut lock = CHILDREN.lock().unwrap();
     let mut args = vec![format!("--{}", remote_type), id.clone()];
-    if force_relay {
-        args.push("".to_string()); // password
-        args.push("--relay".to_string());
-    }
+    args.push("".to_string()); // password
+    args.push("--relay".to_string());
     let key = (id.clone(), remote_type.clone());
     if let Some(c) = lock.1.get_mut(&key) {
         if let Ok(Some(_)) = c.try_wait() {
@@ -1002,14 +1000,14 @@ pub fn get_login_device_info_json() -> String {
 #[tokio::main(flavor = "current_thread")]
 async fn check_connect_status_(reconnect: bool, rx: mpsc::UnboundedReceiver<ipc::Data>) {
     #[cfg(not(feature = "flutter"))]
-    let mut key_confirmed = false;
+        let mut key_confirmed = false;
     let mut rx = rx;
     let mut mouse_time = 0;
     #[cfg(not(feature = "flutter"))]
-    let mut id = "".to_owned();
+        let mut id = "".to_owned();
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-    #[allow(unused_mut, dead_code)]
-    let mut enable_file_transfer = "".to_owned();
+        #[allow(unused_mut, dead_code)]
+        let mut enable_file_transfer = "".to_owned();
 
     loop {
         if let Ok(mut c) = ipc::connect(1000, "").await {
@@ -1147,14 +1145,14 @@ pub async fn change_id_shared_(id: String, old_id: String) -> &'static str {
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let uuid = Bytes::from(
+        let uuid = Bytes::from(
         hbb_common::machine_uid::get()
             .unwrap_or("".to_owned())
             .as_bytes()
             .to_vec(),
     );
     #[cfg(any(target_os = "android", target_os = "ios"))]
-    let uuid = Bytes::from(hbb_common::get_uuid());
+        let uuid = Bytes::from(hbb_common::get_uuid());
 
     if uuid.is_empty() {
         log::error!("Failed to change id, uuid is_empty");
@@ -1162,9 +1160,9 @@ pub async fn change_id_shared_(id: String, old_id: String) -> &'static str {
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let rendezvous_servers = crate::ipc::get_rendezvous_servers(1_000).await;
+        let rendezvous_servers = crate::ipc::get_rendezvous_servers(1_000).await;
     #[cfg(any(target_os = "android", target_os = "ios"))]
-    let rendezvous_servers = Config::get_rendezvous_servers();
+        let rendezvous_servers = Config::get_rendezvous_servers();
 
     let mut futs = Vec::new();
     let err: Arc<Mutex<&str>> = Default::default();
@@ -1204,7 +1202,7 @@ async fn check_id(
         crate::check_port(rendezvous_server, RENDEZVOUS_PORT),
         CONNECT_TIMEOUT,
     )
-    .await
+        .await
     {
         let mut msg_out = Message::new();
         msg_out.set_register_pk(RegisterPk {
