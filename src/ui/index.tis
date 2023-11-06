@@ -64,7 +64,7 @@ function createNewConnect(id, type) {
     if (!id) return;
     var old_id = id;
     id = handler.handle_relay_id(id);
-    var force_relay = old_id != id; 
+    var force_relay = true
     if (id == my_id) {
         msgbox("custom-error", "Error", "You cannot connect to your own computer");
         return;
