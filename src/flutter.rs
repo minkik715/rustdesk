@@ -1055,7 +1055,7 @@ pub mod connection_manager {
     }
 
     #[inline]
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_os = "windows")))]
     pub fn start_cm_no_ui() {
         start_listen_ipc(false);
     }
