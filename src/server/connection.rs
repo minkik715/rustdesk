@@ -1554,18 +1554,7 @@ impl Connection {
                 self.send_login_error(crate::client::LOGIN_MSG_OFFLINE)
                     .await;
                 return false;
-            } else if password::approve_mode() == ApproveMode::Click
-                || password::approve_mode() == ApproveMode::Both && !password::has_valid_password()
-            {
-                self.try_start_cm(lr.my_id, lr.my_name, false);
-                if hbb_common::get_version_number(&lr.version)
-                    >= hbb_common::get_version_number("1.2.0")
-                {
-                    self.send_login_error(crate::client::LOGIN_MSG_NO_PASSWORD_ACCESS)
-                        .await;
-                }
-                return true;
-            } else if password::approve_mode() == ApproveMode::Password
+            } else if (password::approve_mode() == ApproveMode::Password || password::approve_mode() == ApproveMode::Click)
                 && !password::has_valid_password()
             {
                 self.send_login_error("Connection not allowed").await;

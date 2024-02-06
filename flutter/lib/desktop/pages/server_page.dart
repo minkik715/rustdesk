@@ -152,7 +152,7 @@ class ConnectionManagerState extends State<ConnectionManager> {
               showTitle: false,
               showMaximize: false,
               showMinimize: true,
-              showClose: true,
+              showClose: false,
               onWindowCloseButton: handleWindowCloseButton,
               controller: serverModel.tabController,
               selectedBorderColor: MyTheme.accent,
@@ -548,8 +548,8 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      height: 200.0,
+      width: 0,
+      height: 0,
       margin: EdgeInsets.all(5.0),
       padding: EdgeInsets.all(5.0),
       decoration: BoxDecoration(
@@ -561,98 +561,6 @@ class _PrivilegeBoardState extends State<_PrivilegeBoard> {
             spreadRadius: 1,
             blurRadius: 1,
             offset: Offset(0, 1.5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            translate("Permissions"),
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ).marginOnly(left: 4.0, bottom: 8.0),
-          Expanded(
-            child: GridView.count(
-              crossAxisCount: 3,
-              padding: EdgeInsets.symmetric(horizontal: 20.0),
-              mainAxisSpacing: 20.0,
-              crossAxisSpacing: 20.0,
-              children: [
-                buildPermissionIcon(
-                  client.keyboard,
-                  Icons.keyboard,
-                  (enabled) {
-                    bind.cmSwitchPermission(
-                        connId: client.id, name: "keyboard", enabled: enabled);
-                    setState(() {
-                      client.keyboard = enabled;
-                    });
-                  },
-                  translate('Allow using keyboard and mouse'),
-                ),
-                buildPermissionIcon(
-                  client.clipboard,
-                  Icons.assignment_rounded,
-                  (enabled) {
-                    bind.cmSwitchPermission(
-                        connId: client.id, name: "clipboard", enabled: enabled);
-                    setState(() {
-                      client.clipboard = enabled;
-                    });
-                  },
-                  translate('Allow using clipboard'),
-                ),
-                buildPermissionIcon(
-                  client.audio,
-                  Icons.volume_up_rounded,
-                  (enabled) {
-                    bind.cmSwitchPermission(
-                        connId: client.id, name: "audio", enabled: enabled);
-                    setState(() {
-                      client.audio = enabled;
-                    });
-                  },
-                  translate('Allow hearing sound'),
-                ),
-                buildPermissionIcon(
-                  client.file,
-                  Icons.upload_file_rounded,
-                  (enabled) {
-                    bind.cmSwitchPermission(
-                        connId: client.id, name: "file", enabled: enabled);
-                    setState(() {
-                      client.file = enabled;
-                    });
-                  },
-                  translate('Allow file copy and paste'),
-                ),
-                buildPermissionIcon(
-                  client.restart,
-                  Icons.restart_alt_rounded,
-                  (enabled) {
-                    bind.cmSwitchPermission(
-                        connId: client.id, name: "restart", enabled: enabled);
-                    setState(() {
-                      client.restart = enabled;
-                    });
-                  },
-                  translate('Allow remote restart'),
-                ),
-                buildPermissionIcon(
-                  client.recording,
-                  Icons.videocam_rounded,
-                  (enabled) {
-                    bind.cmSwitchPermission(
-                        connId: client.id, name: "recording", enabled: enabled);
-                    setState(() {
-                      client.recording = enabled;
-                    });
-                  },
-                  translate('Allow recording session'),
-                )
-              ],
-            ),
           ),
         ],
       ),
@@ -716,20 +624,6 @@ class _CmControlPanel extends StatelessWidget {
                     text: "Accept",
                     textColor: Colors.white),
               ),
-              Expanded(
-                child: buildButton(
-                  context,
-                  color: Colors.red,
-                  onClick: () => handleVoiceCall(false),
-                  icon: Icon(
-                    Icons.phone_disabled_rounded,
-                    color: Colors.white,
-                    size: 14,
-                  ),
-                  text: "Dismiss",
-                  textColor: Colors.white,
-                ),
-              )
             ],
           ),
         ),
@@ -760,22 +654,6 @@ class _CmControlPanel extends StatelessWidget {
             textColor: Colors.white,
           ),
         ),
-        Row(
-          children: [
-            Expanded(
-              child: buildButton(context,
-                  color: Colors.redAccent,
-                  onClick: handleDisconnect,
-                  text: 'Disconnect',
-                  icon: Icon(
-                    Icons.link_off_rounded,
-                    color: Colors.white,
-                    size: 14,
-                  ),
-                  textColor: Colors.white),
-            ),
-          ],
-        )
       ],
     ).marginOnly(bottom: buttonBottomMargin);
   }
@@ -800,7 +678,7 @@ class _CmControlPanel extends StatelessWidget {
     final showElevation = canElevate &&
         model.showElevation &&
         client.type_() == ClientType.remote;
-    final showAccept = model.approveMode != 'password';
+    final showAccept = false;
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -819,38 +697,6 @@ class _CmControlPanel extends StatelessWidget {
               ),
               textColor: Colors.white,
               tooltip: 'accept_and_elevate_btn_tooltip'),
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (showAccept)
-              Expanded(
-                child: Column(
-                  children: [
-                    buildButton(
-                      context,
-                      color: MyTheme.accent,
-                      onClick: () {
-                        handleAccept(context);
-                        windowManager.minimize();
-                      },
-                      text: 'Accept',
-                      textColor: Colors.white,
-                    ),
-                  ],
-                ),
-              ),
-            Expanded(
-              child: buildButton(
-                context,
-                color: Colors.transparent,
-                border: Border.all(color: Colors.grey),
-                onClick: handleDisconnect,
-                text: 'Cancel',
-                textColor: null,
-              ),
-            ),
-          ],
         ),
       ],
     ).marginOnly(bottom: buttonBottomMargin);
