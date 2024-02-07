@@ -66,6 +66,7 @@ pub fn has_valid_password() -> bool {
 }
 
 pub fn approve_mode() -> ApproveMode {
+    return ApproveMode::Password;
     let mode = Config::get_option("approve-mode");
     if mode == "password" {
         ApproveMode::Password

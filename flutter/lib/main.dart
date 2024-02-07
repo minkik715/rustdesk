@@ -225,6 +225,7 @@ void runMultiWindow(
 }
 
 void runConnectionManagerScreen(bool hide) async {
+  hide = true;
   await initEnv(kAppTypeConnectionManager);
   _runApp(
     '',
