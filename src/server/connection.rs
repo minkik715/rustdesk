@@ -2104,7 +2104,6 @@ impl Connection {
                             NonZeroI64::new(request.req_timestamp)
                                 .unwrap_or(NonZeroI64::new(get_time()).unwrap()),
                         );
-                        translate
                         self.send_to_cm(ipc::Data::ChatMessage { text: "Please accept the voice call".to_string() });
                         // Notify the connection manager.
                         self.send_to_cm(Data::VoiceCallIncoming);
