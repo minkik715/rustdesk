@@ -1320,12 +1320,6 @@ jobs:
           - {
               arch: x86_64,
               target: x86_64-unknown-linux-gnu,
-              os: ubuntu-18.04, 
-              extra-build-features: "",
-            }
-          - {
-              arch: x86_64,
-              target: x86_64-unknown-linux-gnu,
               os: ubuntu-18.04,
               extra-build-features: "flatpak",
             }
