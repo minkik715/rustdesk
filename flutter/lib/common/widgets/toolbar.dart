@@ -79,38 +79,6 @@ List<TTextMenu> toolbarControls(BuildContext context, String id, FFI ffi) {
 
   List<TTextMenu> v = [];
   // elevation
-  if (perms['keyboard'] != false && ffi.elevationModel.showRequestMenu) {
-    v.add(
-      TTextMenu(
-          child: Text(translate('Request Elevation')),
-          onPressed: () =>
-              showRequestElevationDialog(sessionId, ffi.dialogManager)),
-    );
-  }
-  // osAccount / osPassword
-  v.add(
-    TTextMenu(
-      child: Row(children: [
-        Text(translate(pi.isHeadless ? 'OS Account' : 'OS Password')),
-        Offstage(
-          offstage: isDesktop,
-          child: Icon(Icons.edit, color: MyTheme.accent).marginOnly(left: 12),
-        )
-      ]),
-      trailingIcon: Transform.scale(
-        scale: 0.8,
-        child: InkWell(
-          onTap: () => pi.isHeadless
-              ? showSetOSAccount(sessionId, ffi.dialogManager)
-              : handleOsPasswordEditIcon(sessionId, ffi.dialogManager),
-          child: Icon(Icons.edit),
-        ),
-      ),
-      onPressed: () => pi.isHeadless
-          ? showSetOSAccount(sessionId, ffi.dialogManager)
-          : handleOsPasswordAction(sessionId, ffi.dialogManager),
-    ),
-  );
   // paste
   if (isMobile && perms['keyboard'] != false && perms['clipboard'] != false) {
     v.add(TTextMenu(
@@ -512,56 +480,6 @@ Future<List<TToggleMenu>> toolbarDisplayToggle(
           bind.sessionToggleOption(sessionId: sessionId, value: option);
         },
         child: Text(translate('Swap control-command key'))));
-  }
-
-  if (useTextureRender &&
-      pi.isSupportMultiDisplay &&
-      PrivacyModeState.find(id).isFalse &&
-      pi.displaysCount.value > 1 &&
-      bind.mainGetUserDefaultOption(key: kKeyShowMonitorsToolbar) == 'Y') {
-    final value =
-        bind.sessionGetDisplaysAsIndividualWindows(sessionId: ffi.sessionId) ==
-            'Y';
-    v.add(TToggleMenu(
-        value: value,
-        onChanged: (value) {
-          if (value == null) return;
-          bind.sessionSetDisplaysAsIndividualWindows(
-              sessionId: sessionId, value: value ? 'Y' : '');
-        },
-        child: Text(translate('Show displays as individual windows'))));
-  }
-
-  final screenList = await getScreenRectList();
-  if (useTextureRender && pi.isSupportMultiDisplay && screenList.length > 1) {
-    final value = bind.sessionGetUseAllMyDisplaysForTheRemoteSession(
-            sessionId: ffi.sessionId) ==
-        'Y';
-    v.add(TToggleMenu(
-        value: value,
-        onChanged: (value) {
-          if (value == null) return;
-          bind.sessionSetUseAllMyDisplaysForTheRemoteSession(
-              sessionId: sessionId, value: value ? 'Y' : '');
-        },
-        child: Text(translate('Use all my displays for the remote session'))));
-  }
-
-  // 444
-  final codec_format = ffi.qualityMonitorModel.data.codecFormat;
-  if (versionCmp(pi.version, "1.2.4") >= 0 &&
-      (codec_format == "AV1" || codec_format == "VP9")) {
-    final option = 'i444';
-    final value =
-        bind.sessionGetToggleOptionSync(sessionId: sessionId, arg: option);
-    v.add(TToggleMenu(
-        value: value,
-        onChanged: (value) async {
-          if (value == null) return;
-          await bind.sessionToggleOption(sessionId: sessionId, value: option);
-          bind.sessionChangePreferCodec(sessionId: sessionId);
-        },
-        child: Text(translate('True color(4:4:4)'))));
   }
 
   return v;

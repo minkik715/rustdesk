@@ -444,7 +444,7 @@ class _RemoteToolbarState extends State<RemoteToolbar> {
   Widget _buildToolbar(BuildContext context) {
     final List<Widget> toolbarItems = [];
     if (!isWebDesktop) {
-      toolbarItems.add(_PinMenu(state: widget.state));
+      //toolbarItems.add(_PinMenu(state: widget.state));
       toolbarItems.add(_MobileActionMenu(ffi: widget.ffi));
     }
 
@@ -1029,10 +1029,6 @@ class _DisplayMenuState extends State<_DisplayMenu> {
             ffi: widget.ffi,
             screenAdjustor: _screenAdjustor,
           ),
-          _VirtualDisplayMenu(
-            id: widget.id,
-            ffi: widget.ffi,
-          ),
           Divider(),
           toggles(),
           widget.pluginItem,
@@ -1555,11 +1551,7 @@ class _KeyboardMenu extends StatelessWidget {
           kKeyLegacyMode;
     }(), hasData: (data) {
       final groupValue = data as String;
-      List<InputModeMenu> modes = [
-        InputModeMenu(key: kKeyLegacyMode, menu: 'Legacy mode'),
-        InputModeMenu(key: kKeyMapMode, menu: 'Map mode'),
-        InputModeMenu(key: kKeyTranslateMode, menu: 'Translate mode'),
-      ];
+      List<InputModeMenu> modes = [];
       List<RdoMenuButton> list = [];
       final enabled = !ffi.ffiModel.viewOnly;
       onChanged(String? value) async {
