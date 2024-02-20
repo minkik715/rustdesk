@@ -452,7 +452,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Other Default Options", ""),
         ("Voice call", "보이스 콜"),
         ("Text chat", "문자 채팅"),
-        ("Stop voice call", "보이스 콜 끊기"),
+        ("Stop voice call", ""),
         ("relay_hint_tip", ""),
         ("Reconnect", ""),
         ("Codec", "코덱 설정"),
