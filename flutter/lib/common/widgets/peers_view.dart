@@ -369,7 +369,7 @@ abstract class BasePeersView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _PeersView(
-        peers: Peers(name: name, loadEvent: loadEvent, initPeers: initPeers),
+        peers: Peers(name: name, loadEvent: loadEvent, initPeers: RxList<Peer>()),
         peerFilter: peerFilter,
         peerCardBuilder: peerCardBuilder);
   }

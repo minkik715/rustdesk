@@ -107,12 +107,9 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
   List<_TabInfo> _settingTabs() {
     final List<_TabInfo> settingTabs = <_TabInfo>[
       _TabInfo('General', Icons.settings_outlined, Icons.settings),
-      _TabInfo('Security', Icons.enhanced_encryption_outlined,
-          Icons.enhanced_encryption),
       _TabInfo('Network', Icons.link_outlined, Icons.link),
       _TabInfo(
           'Display', Icons.desktop_windows_outlined, Icons.desktop_windows),
-      _TabInfo('Account', Icons.person_outline, Icons.person),
       _TabInfo('About', Icons.info_outline, Icons.info)
     ];
     if (bind.pluginFeatureIsEnabled()) {
@@ -125,10 +122,8 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
   List<Widget> _children() {
     final children = [
       _General(),
-      _Safety(),
       _Network(),
       _Display(),
-      _Account(),
       _About(),
     ];
     if (bind.pluginFeatureIsEnabled()) {
@@ -324,7 +319,6 @@ class _GeneralState extends State<_General> {
           'enable-confirm-closing-tabs',
           isServer: false),
       _OptionCheckBox(context, 'Adaptive bitrate', 'enable-abr'),
-      wallpaper(),
       _OptionCheckBox(
         context,
         'Open connection in new tab',
@@ -332,18 +326,6 @@ class _GeneralState extends State<_General> {
         isServer: false,
       ),
     ];
-    // though this is related to GUI, but opengl problem affects all users, so put in config rather than local
-    children.add(Tooltip(
-      message: translate('software_render_tip'),
-      child: _OptionCheckBox(context, "Always use software rendering",
-          'allow-always-software-render'),
-    ));
-    children.add(_OptionCheckBox(
-      context,
-      'Check for software update on startup',
-      'enable-check-update',
-      isServer: false,
-    ));
     if (bind.mainShowOption(key: 'allow-linux-headless')) {
       children.add(_OptionCheckBox(
           context, 'Allow linux headless', 'allow-linux-headless'));
@@ -564,9 +546,6 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
                   absorbing: locked,
                   child: Column(children: [
                     permissions(context),
-                    password(context),
-                    _Card(title: 'ID', children: [changeId()]),
-                    more(context),
                   ]),
                 ),
               ],
@@ -1042,10 +1021,6 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
                 absorbing: locked,
                 child: Column(children: [
                   server(enabled),
-                  _Card(title: 'Proxy', children: [
-                    _Button('Socks5 Proxy', changeSocks5Proxy,
-                        enabled: enabled),
-                  ]),
                 ]),
               ),
             ]).marginOnly(bottom: _kListViewBottomMargin));
@@ -1144,7 +1119,6 @@ class _DisplayState extends State<_Display> {
             physics: DraggableNeverScrollableScrollPhysics(),
             children: [
               viewStyle(context),
-              scrollStyle(context),
               imageQuality(context),
               codec(context),
               other(context),
@@ -1309,8 +1283,6 @@ class _DisplayState extends State<_Display> {
   Widget other(BuildContext context) {
     final children = [
       otherRow('View Mode', 'view_only'),
-      otherRow('show_monitors_tip', kKeyShowMonitorsToolbar),
-      otherRow('Collapse toolbar', 'collapse_toolbar'),
       otherRow('Show remote cursor', 'show_remote_cursor'),
       otherRow('Zoom cursor', 'zoom-cursor'),
       otherRow('Show quality monitor', 'show_quality_monitor'),
@@ -1320,14 +1292,7 @@ class _DisplayState extends State<_Display> {
       otherRow('Lock after session end', 'lock_after_session_end'),
       otherRow('Privacy mode', 'privacy_mode'),
       otherRow('Reverse mouse wheel', 'reverse_mouse_wheel'),
-      otherRow('True color(4:4:4)', 'i444'),
     ];
-    if (useTextureRender) {
-      children.add(otherRow('Show displays as individual windows',
-          kKeyShowDisplaysAsIndividualWindows));
-      children.add(otherRow('Use all my displays for the remote session',
-          kKeyUseAllMyDisplaysForTheRemoteSession));
-    }
     return _Card(title: 'Other Default Options', children: children);
   }
 }

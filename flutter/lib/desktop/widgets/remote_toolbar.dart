@@ -1021,7 +1021,6 @@ class _DisplayMenuState extends State<_DisplayMenu> {
         menuChildren: [
           _screenAdjustor.adjustWindow(context),
           viewStyle(),
-          scrollStyle(),
           imageQuality(),
           codec(),
           _ResolutionsMenu(

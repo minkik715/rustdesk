@@ -171,7 +171,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("RDP Settings", "RDP settings"),
         ("New Connection", "New connection"),
         ("Your Device", "Your device"),
-        ("empty_recent_tip", "Oops, no recent sessions!\nTime to plan a new one."),
+        ("empty_recent_tip", ""),
         ("empty_favorite_tip", "No favorite peers yet?\nLet's find someone to connect with and add it to your favorites!"),
         ("empty_lan_tip", "Oh no, it looks like we haven't discovered any peers yet."),
         ("empty_address_book_tip", "Oh dear, it appears that there are currently no peers listed in your address book."),
