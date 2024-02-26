@@ -44,6 +44,7 @@ class _DesktopTabPageState extends State<DesktopTabPage> {
     super.initState();
     Get.put<DesktopTabController>(tabController);
     RemoteCountState.init();
+
     tabController.add(TabInfo(
         key: kTabLabelHomePage,
         label: kTabLabelHomePage,
@@ -53,6 +54,17 @@ class _DesktopTabPageState extends State<DesktopTabPage> {
         page: DesktopHomePage(
           key: const ValueKey(kTabLabelHomePage),
         )));
+
+    tabController.add(TabInfo(
+        key: kTabLabelSettingPage,
+        label: kTabLabelSettingPage,
+        selectedIcon: Icons.build_sharp,
+        unselectedIcon: Icons.build_outlined,
+        page: DesktopSettingPage(
+          key: const ValueKey(kTabLabelSettingPage),
+          initialPage: 0,
+        )));
+    tabController.jumpTo(0);
   }
 
   @override
