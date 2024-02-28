@@ -448,24 +448,7 @@ Future<List<TToggleMenu>> toolbarDisplayToggle(
         },
         child: Text(translate('Lock after session end'))));
   }
-  // privacy mode
-  if (ffiModel.keyboard && pi.features.privacyMode) {
-    final option = 'privacy-mode';
-    final rxValue = PrivacyModeState.find(id);
-    v.add(TToggleMenu(
-        value: rxValue.value,
-        onChanged: (value) {
-          if (value == null) return;
-          if (ffiModel.pi.currentDisplay != 0 &&
-              ffiModel.pi.currentDisplay != kAllDisplayValue) {
-            msgBox(sessionId, 'custom-nook-nocancel-hasclose', 'info',
-                'Please switch to Display 1 first', '', ffi.dialogManager);
-            return;
-          }
-          bind.sessionToggleOption(sessionId: sessionId, value: option);
-        },
-        child: Text(translate('Privacy mode'))));
-  }
+
   // swap key
   if (ffiModel.keyboard &&
       ((Platform.isMacOS && pi.platform != kPeerPlatformMacOS) ||

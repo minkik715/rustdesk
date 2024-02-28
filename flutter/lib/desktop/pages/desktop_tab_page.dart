@@ -34,6 +34,21 @@ class DesktopTabPage extends StatefulWidget {
       debugPrintStack(label: '$e');
     }
   }
+
+  static void jumpToMain() {
+    DesktopTabController tabController = Get.find();
+    tabController.jumpTo(0);
+  }
+
+
+
+  static void jumpToSetting() {
+    DesktopTabController tabController = Get.find();
+    var jumpTo = tabController.jumpTo(1);
+    if(jumpTo){
+      DesktopSettingPage.jumpToNetwork();
+    }
+  }
 }
 
 class _DesktopTabPageState extends State<DesktopTabPage> {

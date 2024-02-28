@@ -322,12 +322,17 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
 
   Future<Widget> buildHelpCards() async {
-    return Container();
+    return buildInstallCard("중계서버 연결확인",
+        "원격지원서버에 연결 상태를\n자동 점검하고 있으며, 문제\n발생시 우측하단 에러조치에\n따라주세요.", "", () {});
   }
 
   Widget buildInstallCard(String title, String content, String btnText,
       GestureTapCallback onPressed,
-      {double marginTop = 20.0, String? help, String? link, bool? closeButton, String? closeOption}) {
+      {double marginTop = 60.0,
+      String? help,
+      String? link,
+      bool? closeButton,
+      String? closeOption}) {
     void closeCard() async {
       if (closeOption != null) {
         await bind.mainSetLocalOption(key: closeOption, value: 'N');
@@ -348,89 +353,88 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         Container(
           margin: EdgeInsets.only(top: marginTop),
           child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              Color.fromARGB(255, 226, 66, 188),
-              Color.fromARGB(255, 244, 114, 124),
-            ],
-          )),
-          padding: EdgeInsets.all(20),
-          child: Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: (title.isNotEmpty
-                      ? <Widget>[
-                          Center(
-                              child: Text(
-                            translate(title),
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15),
-                          ).marginOnly(bottom: 6)),
-                        ]
-                      : <Widget>[]) +
-                  <Widget>[
-                    Text(
-                      translate(content),
-                      style: TextStyle(
-                          height: 1.5,
-                          color: Colors.white,
-                          fontWeight: FontWeight.normal,
-                          fontSize: 13),
-                    ).marginOnly(bottom: 20)
-                  ] +
-                  (btnText.isNotEmpty
-                      ? <Widget>[
-                          Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                FixedWidthButton(
-                                  width: 150,
-                                  padding: 8,
-                                  isOutline: true,
-                                  text: translate(btnText),
-                                  textColor: Colors.white,
-                                  borderColor: Colors.white,
-                                  textSize: 20,
-                                  radius: 10,
-                                  onTap: onPressed,
-                                )
-                              ])
-                        ]
-                      : <Widget>[]) +
-                  (help != null
-                      ? <Widget>[
-                          Center(
-                              child: InkWell(
-                                  onTap: () async =>
-                                      await launchUrl(Uri.parse(link!)),
-                                  child: Text(
-                                    translate(help),
-                                    style: TextStyle(
-                                        decoration: TextDecoration.underline,
-                                        color: Colors.white,
-                                        fontSize: 12),
-                                  )).marginOnly(top: 6)),
-                        ]
-                      : <Widget>[]))),
+              decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                   Color.fromARGB(255, 64, 126, 197),
+                   Color.fromARGB(255, 64, 126, 197),
+                ],
+              )),
+              child: Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: (title.isNotEmpty
+                          ? <Widget>[
+                                   Text(
+                                translate(title),
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'Malgun Gothic',
+                                    fontWeight: FontWeight.w400,
+                                    fontSize: 18)).marginOnly(left: 16, top:19, bottom: 6, right: 16),
+                            ]
+                          : <Widget>[]) +
+                      <Widget>[
+                         Text(
+                          translate(content),
+                          style: TextStyle(
+                              height: 1.5,
+                              fontFamily: 'Malgun Gothic',
+                              color: Colors.white,
+                              fontWeight: FontWeight.w400,
+                              fontSize: 13)).marginOnly(left: 16, bottom: 19, right: 16),
+                      ] +
+                      (btnText.isNotEmpty
+                          ? <Widget>[
+                              Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    FixedWidthButton(
+                                      width: 150,
+                                      padding: 8,
+                                      isOutline: true,
+                                      text: translate(btnText),
+                                      textColor: Colors.white,
+                                      borderColor: Colors.white,
+                                      textSize: 20,
+                                      radius: 10,
+                                      onTap: onPressed,
+                                    )
+                                  ])
+                            ]
+                          : <Widget>[]) +
+                      (help != null
+                          ? <Widget>[
+                              Center(
+                                  child: InkWell(
+                                      onTap: () async =>
+                                          await launchUrl(Uri.parse(link!)),
+                                      child: Text(
+                                        translate(help),
+                                        style: TextStyle(
+                                            decoration:
+                                                TextDecoration.underline,
+                                            color: Colors.white,
+                                            fontSize: 12),
+                                      )).marginOnly(top: 6)),
+                            ]
+                          : <Widget>[]))).marginZero,
         ),
         if (closeButton != null && closeButton == true)
-        Positioned(
-          top: 18,
-          right: 0,
-          child: IconButton(
-            icon: Icon(
-              Icons.close,
-              color: Colors.white,
-              size: 20,
+          Positioned(
+            top: 18,
+            right: 0,
+            child: IconButton(
+              icon: Icon(
+                Icons.close,
+                color: Colors.white,
+                size: 20,
+              ),
+              onPressed: closeCard,
             ),
-            onPressed: closeCard,
           ),
-        ),
       ],
     );
   }

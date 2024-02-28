@@ -795,7 +795,6 @@ class __DisplayPageState extends State<_DisplayPage> {
             otherRow('Mute', 'disable_audio'),
             otherRow('Disable clipboard', 'disable_clipboard'),
             otherRow('Lock after session end', 'lock_after_session_end'),
-            otherRow('Privacy mode', 'privacy_mode'),
             otherRow('Touch mode', 'touch-mode'),
             otherRow('True color(4:4:4)', 'i444'),
           ],

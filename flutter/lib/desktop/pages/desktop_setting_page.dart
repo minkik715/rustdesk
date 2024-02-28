@@ -50,6 +50,12 @@ class _TabInfo {
 class DesktopSettingPage extends StatefulWidget {
   final int initialPage;
 
+  static void jumpToNetwork() {
+    PageController controller = Get.find(tag: _kSettingPageControllerTag);
+    RxInt selectedIndex = Get.find(tag: _kSettingPageIndexTag);
+   selectedIndex.value = 1;
+    controller.jumpTo(1);
+  }
   const DesktopSettingPage({Key? key, required this.initialPage})
       : super(key: key);
 
@@ -1068,6 +1074,7 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
         if (result) {
           setState(() {});
           showToast(translate('Successful'));
+          DesktopTabPage.jumpToMain();
         } else {
           showToast(translate('Failed'));
         }
@@ -1082,12 +1089,12 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
               children: [
                 Obx(() => _LabeledTextField(context, 'ID Server', idController,
                     idErrMsg.value, enabled, secure)),
+                _LabeledTextField(
+                    context, 'Key', keyController, '', enabled, secure),
                 Obx(() => _LabeledTextField(context, 'Relay Server',
                     relayController, relayErrMsg.value, enabled, secure)),
                 Obx(() => _LabeledTextField(context, 'API Server',
                     apiController, apiErrMsg.value, enabled, secure)),
-                _LabeledTextField(
-                    context, 'Key', keyController, '', enabled, secure),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [_Button('Apply', submit, enabled: enabled)],
@@ -1290,7 +1297,6 @@ class _DisplayState extends State<_Display> {
       otherRow('Allow file copy and paste', 'enable_file_transfer'),
       otherRow('Disable clipboard', 'disable_clipboard'),
       otherRow('Lock after session end', 'lock_after_session_end'),
-      otherRow('Privacy mode', 'privacy_mode'),
       otherRow('Reverse mouse wheel', 'reverse_mouse_wheel'),
     ];
     return _Card(title: 'Other Default Options', children: children);
