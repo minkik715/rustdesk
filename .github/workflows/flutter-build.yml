@@ -91,8 +91,6 @@ jobs:
 
       - name: Install flutter rust bridge deps
         run: |
-          flutter pub cache clean
-          flutter pub get
           git config --global core.longpaths true
           cargo install flutter_rust_bridge_codegen --version ${{ env.FLUTTER_RUST_BRIDGE_VERSION }} --features "uuid"
           Push-Location flutter ; flutter pub get ; Pop-Location
