@@ -91,9 +91,10 @@ jobs:
 
       - name: Install flutter rust bridge deps
         run: |
+          flutter pub add dynamic_layouts
           git config --global core.longpaths true
           cargo install flutter_rust_bridge_codegen --version ${{ env.FLUTTER_RUST_BRIDGE_VERSION }} --features "uuid"
-          Push-Location flutter ; flutter pub get ; Pop-Location
+          Push-Location flutter ; flutter pub get ; flutter pub add dynamic_layouts; Pop-Location
           ~/.cargo/bin/flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart
 
       - name: Install vcpkg dependencies
