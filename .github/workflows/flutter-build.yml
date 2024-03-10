@@ -89,13 +89,11 @@ jobs:
         with:
           prefix-key: ${{ matrix.job.os }}
 
-      - name: Install flutter rust bridge deps (no cache)
-        run: |
-          flutter pub add dynamic_layouts --no-cache-flutter-engine --no-precompile
-          flutter pub add flutter_gpu_texture_renderer --no-cache-flutter-engine --no-precompile
+      - name: Install flutter rust bridge deps
+        run: |  
           git config --global core.longpaths true
-          cargo install --force flutter_rust_bridge_codegen --version ${{ env.FLUTTER_RUST_BRIDGE_VERSION }} --features "uuid"
-          Push-Location flutter ; flutter pub get --no-cache-flutter-engine --no-precompile ; Pop-Location
+          cargo install flutter_rust_bridge_codegen --version ${{ env.FLUTTER_RUST_BRIDGE_VERSION }} --features "uuid"
+          Push-Location flutter ; flutter clean; flutter pug upgrade; flutter pub get ; flutter pub add dynamic_layouts; flutter pub add flutter_gpu_texture_renderer; Pop-Location
           ~/.cargo/bin/flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart
 
       - name: Install vcpkg dependencies
