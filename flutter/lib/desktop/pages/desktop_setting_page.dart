@@ -53,7 +53,7 @@ class DesktopSettingPage extends StatefulWidget {
   static void jumpToNetwork() {
     PageController controller = Get.find(tag: _kSettingPageControllerTag);
     RxInt selectedIndex = Get.find(tag: _kSettingPageIndexTag);
-   selectedIndex.value = 1;
+    selectedIndex.value = 1;
     controller.jumpTo(1);
   }
   const DesktopSettingPage({Key? key, required this.initialPage})
@@ -1032,6 +1032,20 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
             ]).marginOnly(bottom: _kListViewBottomMargin));
   }
 
+  String parseUrlPort(String url) {
+    final parts = url.split(":");
+    final lastPart = parts.last;
+    try {
+      final port = int.parse(lastPart);
+      final newPort = port + 1;
+      return url.substring(0, url.lastIndexOf(":")) + ":$newPort";
+    } on FormatException {
+      // Handle cases where the last part isn't a valid number
+      print("Invalid port number in URL: $url");
+      return url; // Or return a default URL if desired
+    }
+  }
+
   server(bool enabled) {
     // Simple temp wrapper for PR check
     tmpWrapper() {
@@ -1062,13 +1076,14 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
         apiErrMsg,
       ];
 
+      relayController.text = parseUrlPort(idController.text);
       submit() async {
         bool result = await setServerConfig(
             controllers,
             errMsgs,
             ServerConfig(
                 idServer: idController.text,
-                relayServer: relayController.text,
+                relayServer: parseUrlPort(idController.text),
                 apiServer: apiController.text,
                 key: keyController.text));
         if (result) {
