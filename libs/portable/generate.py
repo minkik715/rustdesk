@@ -1,5 +1,6 @@
 import os
 import optparse
+from hashlib import md5
 import brotli
 
 # file compress level(0-11)
