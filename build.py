@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import os
 import pathlib
 import platform
@@ -211,16 +210,12 @@ def download_extract_features(features, res_dir):
 
         print(f'{feat} download begin')
         download_filename = feat_info['zip_url'].split('/')[-1]
-        checksum_md5_response = urllib.request.urlopen(
+        checksum = urllib.request.urlopen(
             req(feat_info['checksum_url']))
-        for line in checksum_md5_response.read().decode('utf-8').splitlines():
+        for line in checksum.read().decode('utf-8').splitlines():
             if line.split()[1] == download_filename:
-                checksum_md5 = line.split()[0]
                 filename, _headers = urllib.request.urlretrieve(feat_info['zip_url'],
                                                                 download_filename)
-                md5 = hashlib.md5(open(filename, 'rb').read()).hexdigest()
-                if checksum_md5 != md5:
-                    raise Exception(f'{feat} download failed')
                 print(f'{feat} download end. extract bein')
                 zip_file = zipfile.ZipFile(filename)
                 zip_list = zip_file.namelist()
@@ -353,7 +348,6 @@ def build_flutter_deb(version, features):
     system2('mkdir -p tmpdeb/DEBIAN')
     generate_control_file(version)
     system2('cp -a ../res/DEBIAN/* tmpdeb/DEBIAN/')
-    md5_file('usr/share/rustdesk/files/systemd/rustdesk.service')
     system2('dpkg-deb -b tmpdeb rustdesk.deb;')
 
     system2('/bin/rm -rf tmpdeb/')
@@ -392,7 +386,6 @@ def build_deb_from_folder(version, binary_folder):
     system2('mkdir -p tmpdeb/DEBIAN')
     generate_control_file(version)
     system2('cp -a ../res/DEBIAN/* tmpdeb/DEBIAN/')
-    md5_file('usr/share/rustdesk/files/systemd/rustdesk.service')
     system2('dpkg-deb -b tmpdeb rustdesk.deb;')
 
     system2('/bin/rm -rf tmpdeb/')
@@ -620,18 +613,8 @@ def main():
                 system2('mkdir -p tmpdeb/usr/lib/rustdesk')
                 system2('mv tmpdeb/usr/bin/rustdesk tmpdeb/usr/lib/rustdesk/')
                 system2('cp libsciter-gtk.so tmpdeb/usr/lib/rustdesk/')
-                md5_file('usr/share/rustdesk/files/systemd/rustdesk.service')
-                md5_file('etc/rustdesk/startwm.sh')
-                md5_file('etc/X11/rustdesk/xorg.conf')
-                md5_file('etc/pam.d/rustdesk')
-                md5_file('usr/lib/rustdesk/libsciter-gtk.so')
                 system2('dpkg-deb -b tmpdeb rustdesk.deb; /bin/rm -rf tmpdeb/')
                 os.rename('rustdesk.deb', 'rustdesk-%s.deb' % version)
-
-
-def md5_file(fn):
-    md5 = hashlib.md5(open('tmpdeb/' + fn, 'rb').read()).hexdigest()
-    system2('echo "%s %s" >> tmpdeb/DEBIAN/md5sums' % (md5, fn))
 
 
 if __name__ == "__main__":

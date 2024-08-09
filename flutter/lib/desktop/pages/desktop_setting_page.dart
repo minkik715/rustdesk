@@ -1040,8 +1040,6 @@ class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
       final newPort = port + 1;
       return url.substring(0, url.lastIndexOf(":")) + ":$newPort";
     } on FormatException {
-      // Handle cases where the last part isn't a valid number
-      print("Invalid port number in URL: $url");
       return url; // Or return a default URL if desired
     }
   }

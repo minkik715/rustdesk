@@ -133,7 +133,7 @@ class MainService : Service() {
                         loginRequestNotification(id, type, username, peerId)
                     }
                 } catch (e: JSONException) {
-                    e.printStackTrace()
+                    Log.d(logTag, "from rust:add_connection")
                 }
             }
             "stop_capture" -> {
@@ -356,7 +356,12 @@ class MainService : Service() {
                                 buffer.rewind()
                                 onVideoFrameUpdate(buffer)
                             }
-                        } catch (ignored: java.lang.Exception) {
+                        } catch (e: IOException) {
+                            Log.e(logTag, "I/O error occurred: $e")
+                        } catch (e: IllegalArgumentException) {
+                            Log.e(logTag, "Invalid argument: $e")
+                        } catch (e: Exception) {
+                            Log.e(logTag, "Unexpected error: $e")
                         }
                     }, serviceHandler)
                 }
@@ -466,7 +471,9 @@ class MainService : Service() {
         videoEncoder?.let {
             surface = it.createInputSurface()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                surface!!.setFrameRate(1F, FRAME_RATE_COMPATIBILITY_DEFAULT)
+                surface?.let {
+                    it.setFrameRate(1F, FRAME_RATE_COMPATIBILITY_DEFAULT)
+                }
             }
             it.setCallback(cb)
             it.start()
@@ -516,9 +523,15 @@ class MainService : Service() {
         )
         mFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 5)
         try {
-            videoEncoder!!.configure(mFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            videoEncoder?.let{
+                it.configure(mFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            }
+        } catch (e: IOException) {
+            Log.e(logTag, "I/O error occurred: $e")
+        } catch (e: IllegalArgumentException) {
+            Log.e(logTag, "Invalid argument: $e")
         } catch (e: Exception) {
-            Log.e(logTag, "mEncoder.configure fail!")
+            Log.e(logTag, "Unexpected error: $e")
         }
     }
 
@@ -537,8 +550,12 @@ class MainService : Service() {
                     }
                     Log.d(logTag, "Exit audio thread")
                 }
+            } catch (e: IOException) {
+                Log.e(logTag, "I/O error occurred: $e")
+            } catch (e: IllegalArgumentException) {
+                Log.e(logTag, "Invalid argument: $e")
             } catch (e: Exception) {
-                Log.d(logTag, "startAudioRecorder fail:$e")
+                Log.e(logTag, "Unexpected error: $e")
             }
         } else {
             Log.d(logTag, "startAudioRecorder fail")

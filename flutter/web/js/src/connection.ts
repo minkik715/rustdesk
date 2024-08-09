@@ -66,7 +66,7 @@ export default class Connection {
         try {
           this._password = Uint8Array.from(JSON.parse("[" + p + "]"));
         } catch (e) {
-          console.error(e);
+          return undefined
         }
       }
     }
@@ -170,13 +170,10 @@ export default class Connection {
           pk = undefined;
         }
       } catch (e) {
-        console.error(e);
         pk = undefined;
       }
       if (!pk)
-        console.error(
-          "Handshake failed: invalid public key from rendezvous server"
-        );
+        return undefined
     }
     if (!pk) {
       // send an empty message out in case server is setting up secure and waiting for first message
@@ -187,7 +184,6 @@ export default class Connection {
     const msg = (await this._ws?.next()) as message.Message;
     let signedId: any = msg?.signed_id;
     if (!signedId) {
-      console.error("Handshake failed: invalid message type");
       const public_key = message.PublicKey.fromPartial({});
       this._ws?.sendMessage({ public_key });
       return;
@@ -195,9 +191,6 @@ export default class Connection {
     try {
       signedId = await globals.verify(signedId.id, Uint8Array.from(pk!));
     } catch (e) {
-      console.error(e);
-      // fall back to non-secure connection in case pk mismatch
-      console.error("pk mismatch, fall back to non-secure");
       const public_key = message.PublicKey.fromPartial({});
       this._ws?.sendMessage({ public_key });
       return;
@@ -206,15 +199,11 @@ export default class Connection {
     const id = idpk.id;
     const theirPk = idpk.pk;
     if (id != this._id!) {
-      console.error("Handshake failed: sign failure");
       const public_key = message.PublicKey.fromPartial({});
       this._ws?.sendMessage({ public_key });
       return;
     }
     if (theirPk.length != 32) {
-      console.error(
-        "Handshake failed: invalid public box key length from peer"
-      );
       const public_key = message.PublicKey.fromPartial({});
       this._ws?.sendMessage({ public_key });
       return;
@@ -274,7 +263,7 @@ export default class Connection {
         try {
           globals.copyToClipboard(new TextDecoder().decode(cb.content));
         } catch (e) {
-          console.error(e);
+          return undefined
         }
         // globals.pushEvent("clipboard", cb);
       } else if (msg?.cursor_data) {

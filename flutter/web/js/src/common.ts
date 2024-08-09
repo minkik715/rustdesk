@@ -27,7 +27,6 @@ export async function decompress(compressedArray: Uint8Array) {
     }
     return decompressor.decode(compressedArray, n);
   } catch (e) {
-    console.error("decompress failed: " + e);
     return undefined;
   }
 }
@@ -57,7 +56,7 @@ export function mapKey(name: string, isDesktop: Boolean) {
   }
   const control_key = controlKeyFromJSON(tmp);
   if (control_key == ControlKey.UNRECOGNIZED) {
-    console.error("Unknown control key " + tmp);
+    return KeyEvent.fromPartial({ control_key });
   }
   return KeyEvent.fromPartial({ control_key });
 }

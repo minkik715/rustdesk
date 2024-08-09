@@ -12,9 +12,11 @@
 
 void flog(char const *fmt, ...)
 {
-    FILE *h = fopen("C:\\Windows\\temp\\test_rustdesk.log", "at");
-    if (!h)
+    FILE *h = NULL;
+    errno_t err = fopen_s(&h, "C:\\Windows\\temp\\test_rustdesk.log", "at");
+    if (err != 0 || !h)
         return;
+
     va_list arg;
     va_start(arg, fmt);
     vfprintf(h, fmt, arg);

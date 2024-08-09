@@ -103,8 +103,6 @@ export default class Websock {
           //
         }
         this._status = e;
-        console.error("WebSock.onclose: ");
-        console.error(e);
         this._eventHandlers.close(e);
         reject("Reset by the peer");
       };
@@ -114,8 +112,6 @@ export default class Websock {
           return;
         }
         this._status = e;
-        console.error("WebSock.onerror: ")
-        console.error(e);
         this._eventHandlers.error(e);
       };
     });

@@ -247,8 +247,12 @@ class InputService : AccessibilityService() {
             builder.addStroke(stroke)
             Log.d(logTag, "end gesture x:$x y:$y time:$duration")
             dispatchGesture(builder.build(), null, null)
+        } catch (e: IOException) {
+            Log.e(logTag, "I/O error occurred: $e")
+        } catch (e: IllegalArgumentException) {
+            Log.e(logTag, "Invalid argument: $e")
         } catch (e: Exception) {
-            Log.e(logTag, "endGesture error:$e")
+            Log.e(logTag, "Unexpected error: $e")
         }
     }
 

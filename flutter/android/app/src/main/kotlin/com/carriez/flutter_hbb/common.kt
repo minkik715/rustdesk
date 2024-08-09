@@ -80,8 +80,12 @@ fun startAction(context: Context, action: String) {
                 data = Uri.parse("package:" + context.packageName)
             }
         })
+    } catch (e: IOException) {
+        Log.e(logTag, "I/O error occurred: $e")
+    } catch (e: IllegalArgumentException) {
+        Log.e(logTag, "Invalid argument: $e")
     } catch (e: Exception) {
-        e.printStackTrace()
+        Log.e(logTag, "Unexpected error: $e")
     }
 }
 
